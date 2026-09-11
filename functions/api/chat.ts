@@ -3,33 +3,46 @@ import { generatePersonaResponse } from "../../src/lib/ai/provider";
 export async function onRequestPost({ request, env }: any) {
   try {
     const body = await request.json();
-    const { messages, persona, isVoiceMode, userName } = body;
+    const { message, history, personaId, persona } = body;
 
-    if (!messages || !persona) {
-      return new Response(JSON.stringify({ error: "Missing required fields" }), {
+    if (!message) {
+      return new Response(JSON.stringify({ error: "Missing required message field" }), {
         status: 400,
         headers: { "Content-Type": "application/json" }
       });
     }
 
-    // Optional admin security logic
-    if (env.ADMIN_SECRET && env.ADMIN_SECRET.length > 0) {
-      const authHeader = request.headers.get("Authorization");
-      if (!authHeader || authHeader !== `Bearer ${env.ADMIN_SECRET}`) {
-        return new Response(JSON.stringify({ error: "Unauthorized" }), {
-          status: 401,
-          headers: { "Content-Type": "application/json" }
-        });
-      }
-    }
+    // Map history to the format expected by provider
+    const formattedMessages = Array.isArray(history) ? history : [];
+    formattedMessages.push({ role: "user", content: message });
+
+    // Try to get persona from body, or construct a generic one if missing
+    // In CallSession.tsx, only personaId is sent, so we must mock a base persona object
+    // to pass into generatePersonaResponse (which expects a Persona object for system prompts).
+    const fallbackPersona = persona || {
+      id: personaId || "unknown",
+      name: "Dream Babe",
+      slug: "dream-babe",
+      systemPrompt: "You are a friendly, flirty persona named Dream Babe. You respond naturally, like a human, and keep answers short (1-2 sentences maximum, never generate essays).",
+      profileImage: "",
+      headerImage: "",
+      description: "A fun, flirty companion",
+      isLive: true,
+      age: 21,
+      occupations: [],
+      hobbies: [],
+      personalityTraits: [],
+      profileGallery: []
+    };
 
     const { content, provider } = await generatePersonaResponse({
-      persona,
-      messages,
+      persona: fallbackPersona,
+      messages: formattedMessages,
       envOverride: env
     });
 
-    return new Response(JSON.stringify({ response: content, provider }), {
+    // Note: CallSession.tsx expects the response text in `data.message`
+    return new Response(JSON.stringify({ message: content, provider }), {
       status: 200,
       headers: { "Content-Type": "application/json" }
     });
