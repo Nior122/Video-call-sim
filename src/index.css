@@ -1,0 +1,73 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --font-handwriting: 'Caveat', cursive;
+    --bg-primary: #07080e;
+    --text-primary: #f3f4f6;
+  }
+
+  html.light,
+  [data-theme="light"] {
+    --bg-primary: #f8fafc;
+    --text-primary: #0f172a;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    overflow-x: hidden;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+    transition: background-color 0.25s ease, color 0.25s ease;
+  }
+}
+
+/* Global Media & Content Protection */
+img, video {
+  -webkit-user-drag: none;
+  -khtml-user-drag: none;
+  -moz-user-drag: none;
+  -o-user-drag: none;
+  user-drag: none;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  pointer-events: auto;
+}
+
+/* Disable print / save to PDF for media protection */
+@media print {
+  html, body {
+    display: none !important;
+    visibility: hidden !important;
+  }
+}
+
+.font-handwriting {
+  font-family: var(--font-handwriting);
+}
+
+/* Custom glowing effects matching the design reference */
+.glow-pink-purple {
+  box-shadow: 0 0 40px -10px rgba(225, 20, 122, 0.4), 0 0 60px -15px rgba(147, 51, 234, 0.3);
+}
+
+.glow-card-hover:hover {
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.8), 0 0 20px -5px rgba(225, 20, 122, 0.25);
+}
+
+/* Hide scrollbar for category tabs */
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

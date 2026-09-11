@@ -1,0 +1,201 @@
+{
+  "entities": {
+    "Persona": {
+      "title": "Persona",
+      "description": "A fictional AI persona with detailed profile, style, media, and bio.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the persona"
+        },
+        "name": {
+          "type": "string",
+          "description": "Display name of the persona"
+        },
+        "slug": {
+          "type": "string",
+          "description": "URL slug for the persona"
+        },
+        "description": {
+          "type": "string",
+          "description": "Short overview of the persona"
+        },
+        "profileImage": {
+          "type": "string",
+          "description": "Main profile photo URL"
+        },
+        "coverImage": {
+          "type": "string",
+          "description": "Profile banner cover image URL"
+        },
+        "personality": {
+          "type": "string",
+          "description": "Core personality traits"
+        },
+        "interests": {
+          "type": "string",
+          "description": "Comma-separated or text of interests"
+        },
+        "age": {
+          "type": "number",
+          "description": "Age of the persona"
+        },
+        "city": {
+          "type": "string",
+          "description": "City location"
+        },
+        "country": {
+          "type": "string",
+          "description": "Country location"
+        },
+        "occupation": {
+          "type": "string",
+          "description": "Occupation or job title"
+        },
+        "shortBio": {
+          "type": "string",
+          "description": "Brief bio for chat headers"
+        },
+        "longBio": {
+          "type": "string",
+          "description": "Full extended bio"
+        },
+        "speakingStyle": {
+          "type": "string",
+          "description": "Linguistic and communication style"
+        },
+        "communicationTone": {
+          "type": "string",
+          "description": "Tone such as Playful, Sassy, Alluring"
+        },
+        "flirtLevel": {
+          "type": "number",
+          "description": "Flirt level scale (1-4)"
+        },
+        "emojiFrequency": {
+          "type": "string",
+          "description": "Frequency of emojis used"
+        },
+        "gallery": {
+          "type": "string",
+          "description": "Comma separated list of gallery image URLs"
+        },
+        "active": {
+          "type": "boolean",
+          "description": "Whether the persona is currently active"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Creation timestamp"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Last update timestamp"
+        }
+      },
+      "required": ["name", "slug", "description", "personality"]
+    },
+    "ChatMessage": {
+      "title": "ChatMessage",
+      "description": "A single chat message exchanged between user and persona.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique message ID"
+        },
+        "personaId": {
+          "type": "string",
+          "description": "ID or slug of the persona"
+        },
+        "role": {
+          "type": "string",
+          "enum": ["user", "assistant", "system"],
+          "description": "Message author role"
+        },
+        "content": {
+          "type": "string",
+          "description": "Text content of the message"
+        },
+        "attachmentUrl": {
+          "type": "string",
+          "description": "Attached media URL if any"
+        },
+        "attachmentType": {
+          "type": "string",
+          "enum": ["image", "video", "file"],
+          "description": "Type of attached media"
+        },
+        "attachmentName": {
+          "type": "string",
+          "description": "Display name of the attachment"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Message sent timestamp"
+        }
+      },
+      "required": ["role", "content", "timestamp"]
+    },
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Profile data for an authenticated user",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Firebase Auth user ID"
+        },
+        "email": {
+          "type": "string",
+          "description": "User email address"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "User display name or alias"
+        },
+        "photoURL": {
+          "type": "string",
+          "description": "Avatar photo URL"
+        },
+        "isAnonymous": {
+          "type": "boolean",
+          "description": "Whether the user is signed in as a guest"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Account creation timestamp"
+        },
+        "lastLoginAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Last sign in timestamp"
+        }
+      },
+      "required": ["uid"]
+    }
+  },
+  "firestore": {
+    "/personas/{personaId}": {
+      "schema": "Persona",
+      "description": "Public catalog of personas available on the platform"
+    },
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "Private user profile and metadata accessible only to the owner"
+    },
+    "/users/{userId}/conversations/{personaId}/messages/{messageId}": {
+      "schema": "ChatMessage",
+      "description": "Private chat message history for the user with a specific persona"
+    },
+    "/conversations/{conversationId}/messages/{messageId}": {
+      "schema": "ChatMessage",
+      "description": "Chat messages within a user conversation"
+    }
+  }
+}

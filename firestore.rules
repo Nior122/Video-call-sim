@@ -1,0 +1,50 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    match /personas/{personaId} {
+      allow read: if isValidId(personaId);
+      allow write: if false; // Managed via server admin API
+    }
+
+    // User profile and user-specific subcollections
+    match /users/{userId} {
+      allow read, write: if isValidId(userId) && isOwner(userId);
+
+      match /conversations/{personaId} {
+        allow read, write: if isValidId(userId) && isValidId(personaId) && isOwner(userId);
+
+        match /messages/{messageId} {
+          allow read, create: if isValidId(userId) && isValidId(personaId) && isValidId(messageId) && isOwner(userId);
+          allow update, delete: if false;
+        }
+      }
+    }
+
+    // Generic conversations (for backward compatibility and guest chats)
+    match /conversations/{conversationId} {
+      allow read, write: if isValidId(conversationId);
+      
+      match /messages/{messageId} {
+        allow read, create: if isValidId(conversationId) && isValidId(messageId);
+        allow update, delete: if false;
+      }
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "name": "Dream Girl",
+  "description": "Meet verified companions and creators for 1-on-1 video calls and messaging.",
+  "requestFramePermissions": ["camera", "microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,61 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Note: For Vercel Serverless deployment, change provider to "postgresql" 
+// and supply a remote database URL (e.g. Supabase, Neon, Vercel Postgres).
+// SQLite is used here for zero-config local development and Cloud Run containers.
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Persona {
+  id            String         @id @default(uuid())
+  name          String
+  slug          String         @unique
+  description   String
+  profileImage  String?
+  coverImage    String?
+  gallery       String?        // Comma separated URLs or JSON array
+
+  // Detailed profile fields
+  isAdult       Boolean        @default(true)
+  age           Int?
+  city          String?
+  country       String?
+  occupation    String?
+  
+  shortBio      String?
+  longBio       String?
+
+  personality   String
+  interests     String
+  hobbies       String?
+  likes         String?
+  dislikes      String?
+  background    String
+
+  speakingStyle String
+  communicationTone String?
+  flirtLevel    Int            @default(0) // 0-4
+  emojiFrequency String?       // Low, Medium, High
+  
+  systemPrompt  String?
+
+  active        Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  videos        PersonaVideo[]
+}
+
+model PersonaVideo {
+  id        String   @id @default(uuid())
+  personaId String
+  persona   Persona  @relation(fields: [personaId], references: [id], onDelete: Cascade)
+  url       String
+  title     String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
