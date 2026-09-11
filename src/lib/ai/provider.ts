@@ -4,6 +4,13 @@ import { buildPersonaContext } from "./persona-context";
 interface GenerateParams {
   persona: Persona;
   messages: Pick<ChatMessage, "role" | "content">[];
+  envOverride?: Record<string, any>;
+}
+
+function getEnvValue(envOverride: Record<string, any> | undefined, key: string): string | undefined {
+  if (envOverride && envOverride[key]) return envOverride[key];
+  if (typeof process !== 'undefined' && process.env && process.env[key]) return process.env[key];
+  return undefined;
 }
 
 export async function callOpenAICompatible(
@@ -87,6 +94,7 @@ function getLocalFallbackResponse(persona: Persona, lastUserMessage: string): st
 export async function generatePersonaResponse({
   persona,
   messages,
+  envOverride,
 }: GenerateParams): Promise<{ content: string; provider: string }> {
   const systemPrompt = buildPersonaContext(persona);
 
@@ -104,12 +112,13 @@ export async function generatePersonaResponse({
   const lastUserMsg = messages[messages.length - 1]?.content || "";
 
   // 1. PRIMARY: Groq (ultra-fast OpenAI-compatible API)
-  if (process.env.GROQ_API_KEY) {
+  const groqApiKey = getEnvValue(envOverride, 'GROQ_API_KEY');
+  if (groqApiKey) {
     try {
-      const model = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
+      const model = getEnvValue(envOverride, 'GROQ_MODEL') || "llama-3.3-70b-versatile";
       const content = await callOpenAICompatible(
         "https://api.groq.com/openai/v1/chat/completions",
-        process.env.GROQ_API_KEY,
+        groqApiKey,
         model,
         formattedMessages,
         80,
@@ -122,12 +131,13 @@ export async function generatePersonaResponse({
   }
 
   // 2. FALLBACK: OpenRouter (OpenRouter API)
-  if (process.env.OPENROUTER_API_KEY) {
+  const openRouterApiKey = getEnvValue(envOverride, 'OPENROUTER_API_KEY');
+  if (openRouterApiKey) {
     try {
-      const model = process.env.OPENROUTER_MODEL || "meta-llama/llama-3.3-70b-instruct";
+      const model = getEnvValue(envOverride, 'OPENROUTER_MODEL') || "meta-llama/llama-3.3-70b-instruct";
       const content = await callOpenAICompatible(
         "https://openrouter.ai/api/v1/chat/completions",
-        process.env.OPENROUTER_API_KEY,
+        openRouterApiKey,
         model,
         formattedMessages,
         80,
@@ -144,13 +154,14 @@ export async function generatePersonaResponse({
   }
 
   // 3. OPTIONAL SECONDARY FALLBACK: Standard OpenAI API or OpenAI Proxy
-  if (process.env.OPENAI_API_KEY) {
+  const openAiApiKey = getEnvValue(envOverride, 'OPENAI_API_KEY');
+  if (openAiApiKey) {
     try {
-      const baseUrl = (process.env.OPENAI_BASE_URL || "https://api.openai.com/v1").replace(/\/+$/, "");
-      const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
+      const baseUrl = (getEnvValue(envOverride, 'OPENAI_BASE_URL') || "https://api.openai.com/v1").replace(/\/+$/, "");
+      const model = getEnvValue(envOverride, 'OPENAI_MODEL') || "gpt-4o-mini";
       const content = await callOpenAICompatible(
         `${baseUrl}/chat/completions`,
-        process.env.OPENAI_API_KEY,
+        openAiApiKey,
         model,
         formattedMessages,
         80,
