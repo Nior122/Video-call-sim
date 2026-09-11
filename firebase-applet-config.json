@@ -1,12 +1,12 @@
 {
-  "projectId": "elevated-collective-f2ts5",
-  "appId": "1:963667855419:web:90f87f69dba2b12ce0341e",
-  "apiKey": "AIzaSyCVlxJJtuebtcrIyK66GG7s3moc-PMisUQ",
-  "authDomain": "elevated-collective-f2ts5.firebaseapp.com",
-  "firestoreDatabaseId": "ai-studio-freex-2011990f-fba5-4080-8ae1-8763cf868337",
-  "storageBucket": "elevated-collective-f2ts5.firebasestorage.app",
-  "messagingSenderId": "963667855419",
+  "projectId": "dreamgirl-c7f68",
+  "appId": "1:579262787582:web:2263fc87fbe9369c8c9aaf",
+  "apiKey": "AIzaSyCkbTTYspTv-Y179xBmZlPQUetLgVAzPFU",
+  "authDomain": "dreamgirl-c7f68.firebaseapp.com",
+  "firestoreDatabaseId": "(default)",
+  "storageBucket": "dreamgirl-c7f68.firebasestorage.app",
+  "messagingSenderId": "579262787582",
   "measurementId": "",
-  "oAuthClientId": "963667855419-uvpm8hcqi4muf1ctvp02rg6a1rqpbd6r.apps.googleusercontent.com",
+  "oAuthClientId": "",
   "recaptchaSiteKey": ""
 }
