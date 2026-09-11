@@ -79,7 +79,7 @@ export default function Navbar({
             </div>
             <div className="flex items-center">
               <span className="font-extrabold text-xl sm:text-2xl tracking-tight text-white dark:text-white light:text-slate-900 group-hover:text-pink-400 transition-colors">
-                Dream Girl
+                Dream Babe
               </span>
             </div>
           </Link>
@@ -197,7 +197,7 @@ export default function Navbar({
                     >
                       <div className="px-3 py-2 border-b border-white/5">
                         <p className="text-xs font-semibold text-white truncate">
-                          {profile?.displayName || user.displayName || (user.isAnonymous ? "Guest Member" : "Dream Girl Member")}
+                          {profile?.displayName || user.displayName || (user.isAnonymous ? "Guest Member" : "Dream Babe Member")}
                         </p>
                         <p className="text-[11px] text-neutral-400 truncate">
                           {user.isAnonymous ? "Anonymous Guest" : user.email}
@@ -397,7 +397,7 @@ export default function Navbar({
                     <Sparkles className="w-4 h-4 text-white" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-bold text-white">How Dream Girl Works</h3>
+                    <h3 className="text-lg font-bold text-white">How Dream Babe Works</h3>
                     <p className="text-xs text-neutral-400">Direct connections with verified Dreamgirls</p>
                   </div>
                 </div>

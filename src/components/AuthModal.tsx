@@ -127,7 +127,7 @@ export default function AuthModal() {
             </div>
             <div>
               <h2 className="text-xl font-extrabold text-white tracking-tight">
-                {mode === "signin" ? "Welcome Back" : "Join Dream Girl"}
+                {mode === "signin" ? "Welcome Back" : "Join Dream Babe"}
               </h2>
               <p className="text-xs text-neutral-400">
                 {mode === "signin"

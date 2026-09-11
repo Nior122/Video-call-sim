@@ -67,7 +67,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const profileData: UserProfile = {
         uid: currentUser.uid,
         email: currentUser.email,
-        displayName: savedData.displayName || currentUser.displayName || (currentUser.isAnonymous ? "Guest Member" : "Dream Girl Member"),
+        displayName: savedData.displayName || currentUser.displayName || (currentUser.isAnonymous ? "Guest Member" : "Dream Babe Member"),
         photoURL: savedData.photoURL || currentUser.photoURL || null,
         isAnonymous: currentUser.isAnonymous,
         lastLoginAt: serverTimestamp(),
@@ -90,7 +90,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setProfile({
         uid: currentUser.uid,
         email: currentUser.email,
-        displayName: currentUser.displayName || (currentUser.isAnonymous ? "Guest Member" : "Dream Girl Member"),
+        displayName: currentUser.displayName || (currentUser.isAnonymous ? "Guest Member" : "Dream Babe Member"),
         photoURL: currentUser.photoURL || null,
         isAnonymous: currentUser.isAnonymous,
       });
@@ -177,7 +177,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateUserProfile = async (name: string, photoURL?: string) => {
     if (!auth.currentUser) return;
-    const cleanName = name.trim() || (auth.currentUser.isAnonymous ? "Guest Member" : "Dream Girl Member");
+    const cleanName = name.trim() || (auth.currentUser.isAnonymous ? "Guest Member" : "Dream Babe Member");
     const cleanPhoto = photoURL || null;
 
     await updateProfile(auth.currentUser, {

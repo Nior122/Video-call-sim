@@ -12,7 +12,7 @@ export default function Footer() {
                 <Sparkles className="w-4 h-4 text-white" />
               </div>
               <span className="font-extrabold text-xl tracking-tight text-white">
-                Dream Girl
+                Dream Babe
               </span>
             </Link>
             <p className="text-xs text-neutral-400 max-w-sm leading-relaxed">
@@ -47,7 +47,7 @@ export default function Footer() {
         </div>
 
         <div className="pt-5 flex flex-col sm:flex-row justify-between items-center gap-4 text-xs text-neutral-500">
-          <p>© {new Date().getFullYear()} Dream Girl. All rights reserved.</p>
+          <p>© {new Date().getFullYear()} Dream Babe. All rights reserved.</p>
           <div className="flex items-center gap-2 text-[11px] text-neutral-500">
             <span>Verified Profiles</span>
             <span>•</span>

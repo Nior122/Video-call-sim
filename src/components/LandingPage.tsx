@@ -283,7 +283,7 @@ export default function LandingPage() {
                 <span>Simple 3-Step Guide</span>
               </div>
               <h2 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
-                How Dream Girl Works
+                How Dream Babe Works
               </h2>
               <p className="text-neutral-400 text-sm mt-2">
                 Getting connected is fast, easy, and completely free to explore.
@@ -341,7 +341,7 @@ export default function LandingPage() {
                 Ready to Meet Your Favorite Dreamgirl?
               </h2>
               <p className="text-xs sm:text-sm text-neutral-300 leading-relaxed">
-                Join thousands connecting every day on Dream Girl. Explore the complete catalog of verified creators now.
+                Join thousands connecting every day on Dream Babe. Explore the complete catalog of verified creators now.
               </p>
               <div className="flex flex-wrap items-center justify-center gap-3.5 pt-2">
                 <button
@@ -379,7 +379,7 @@ export default function LandingPage() {
                     <Sparkles className="w-4 h-4 text-white" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-bold text-white">How Dream Girl Works</h3>
+                    <h3 className="text-lg font-bold text-white">How Dream Babe Works</h3>
                     <p className="text-xs text-neutral-400">Direct connections with verified Dreamgirls</p>
                   </div>
                 </div>
