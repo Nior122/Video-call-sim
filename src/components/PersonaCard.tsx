@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../contexts/AuthContext";
 import { Persona } from "../types";
 import { Phone, MapPin, RefreshCw } from "lucide-react";
 import {
@@ -16,6 +17,7 @@ export interface PersonaCardProps {
 
 export default function PersonaCard({ persona }: PersonaCardProps) {
   const navigate = useNavigate();
+  const { user, openAuthModal } = useAuth();
   const [status, setStatus] = useState<PersonaOnlineStatus>(() =>
     getPersonaOnlineStatus(persona.slug)
   );
@@ -47,7 +49,7 @@ export default function PersonaCard({ persona }: PersonaCardProps) {
     <div className="group relative bg-[#0d0f1a] border border-white/[0.08] hover:border-pink-500/40 rounded-[28px] overflow-hidden transition-all duration-300 flex flex-col h-full shadow-xl shadow-black/50 hover:shadow-2xl hover:shadow-black/70 hover:-translate-y-1.5">
       {/* CARD COVER / BANNER PHOTO */}
       <div
-        onClick={() => navigate(`/dreamgirl/${persona.slug}`)}
+        onClick={() => user ? navigate(`/dreamgirl/${persona.slug}`) : openAuthModal("signin")}
         className="relative h-36 sm:h-40 w-full overflow-hidden bg-neutral-900 shrink-0 cursor-pointer"
       >
         {persona.coverImage || persona.profileImage ? (
@@ -92,7 +94,7 @@ export default function PersonaCard({ persona }: PersonaCardProps) {
       <div className="px-5 pb-5 flex-1 flex flex-col relative z-10">
         <div className="-mt-16 sm:-mt-20 mb-3 flex items-end justify-between">
           <div
-            onClick={() => navigate(`/dreamgirl/${persona.slug}`)}
+            onClick={() => user ? navigate(`/dreamgirl/${persona.slug}`) : openAuthModal("signin")}
             className="relative cursor-pointer"
           >
             <div className="p-[3px] bg-gradient-to-tr from-[#e1147a] via-[#ec4899] to-[#9333ea] rounded-full shadow-2xl shadow-black/90 group-hover:shadow-pink-500/40 transition-all">
@@ -122,7 +124,7 @@ export default function PersonaCard({ persona }: PersonaCardProps) {
 
         {/* NAME & USERNAME */}
         <div
-          onClick={() => navigate(`/dreamgirl/${persona.slug}`)}
+          onClick={() => user ? navigate(`/dreamgirl/${persona.slug}`) : openAuthModal("signin")}
           className="mb-1.5 cursor-pointer"
         >
           <div className="flex items-baseline gap-2">
@@ -160,18 +162,18 @@ export default function PersonaCard({ persona }: PersonaCardProps) {
         <div className="mt-auto grid grid-cols-2 gap-2.5 pt-2">
           <button
             type="button"
-            onClick={() => navigate(`/call/${persona.slug}`)}
+            onClick={() => user ? navigate(`/call/${persona.slug}`) : openAuthModal("signin")}
             className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-full text-xs font-semibold text-white bg-gradient-to-r from-[#e1147a] to-[#9333ea] hover:opacity-95 shadow-md shadow-pink-500/20 active:scale-95 transition-all cursor-pointer"
           >
             <Phone className="w-3.5 h-3.5" />
             <span>Call</span>
           </button>
-          <Link
-            to={`/dreamgirl/${persona.slug}`}
+          <button
+            onClick={() => user ? navigate(`/dreamgirl/${persona.slug}`) : openAuthModal("signin")}
             className="flex items-center justify-center py-2.5 px-3 rounded-full text-xs font-semibold text-neutral-200 hover:text-white bg-white/[0.06] hover:bg-white/[0.12] border border-white/10 active:scale-95 transition-all text-center"
           >
             View Profile
-          </Link>
+          </button>
         </div>
       </div>
     </div>

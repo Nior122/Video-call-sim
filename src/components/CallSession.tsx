@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef, FormEvent, ChangeEvent } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
+import { useAuth } from "../contexts/AuthContext";
 import { Persona, ChatMessage, CallState, CALL_CONFIG, PersonaVideo } from "../types";
 import { DEFAULT_PERSONAS } from "../data/defaultPersonas";
 import { motion, AnimatePresence } from "framer-motion";
@@ -86,6 +87,7 @@ const SHOCKING_LOVE_IT_MESSAGES = [
 ];
 
 export default function CallSession() {
+  const { user, openAuthModal, loading: authLoading } = useAuth();
   const { slug } = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -95,6 +97,7 @@ export default function CallSession() {
     isChatParam ? "IDLE" : "CONNECTING"
   );
   const callStateRef = useRef<CallState>(isChatParam ? "IDLE" : "CONNECTING");
+
   useEffect(() => {
     callStateRef.current = callState;
   }, [callState]);
@@ -118,6 +121,13 @@ export default function CallSession() {
     getPersonaOnlineStatus(slug)
   );
   const pendingOfflineRepliesRef = useRef<Array<() => void>>([]);
+
+  useEffect(() => {
+    if (!authLoading && !user) {
+      openAuthModal("signin");
+      navigate(`/dreamgirl/${slug}`);
+    }
+  }, [user, authLoading, navigate, openAuthModal, slug]);
 
   useEffect(() => {
     if (slug) {
@@ -337,9 +347,63 @@ export default function CallSession() {
   };
 
   // Chat state
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  useEffect(() => {
+    const checkExpiry = setInterval(() => {
+      const stored = localStorage.getItem("chat_" + slug);
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          if (Date.now() - parsed.savedAt >= 20 * 60 * 1000) {
+            localStorage.removeItem("chat_" + slug);
+            setMessages([]);
+          }
+        } catch (e) {}
+      }
+    }, 60000); // check every minute
+    return () => clearInterval(checkExpiry);
+  }, [slug]);
+  const [messages, setMessages] = useState<ChatMessage[]>(() => {
+    try {
+      const stored = localStorage.getItem("chat_" + slug);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Date.now() - parsed.savedAt < 20 * 60 * 1000) {
+          // Valid within 20 mins
+          return parsed.messages.map((m: any) => ({
+             ...m,
+             timestamp: new Date(m.timestamp)
+          }));
+        } else {
+          // Expired, delete it
+          localStorage.removeItem("chat_" + slug);
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    return [];
+  });
+  
+  // Save to localStorage on change
+  useEffect(() => {
+    if (messages.length > 0) {
+      const msgsToSave = messages.map(m => {
+        // Strip media url
+        const { attachmentUrl, ...rest } = m;
+        // if it had an image, keep track of it so count works
+        if (attachmentUrl || m.wasImage) {
+           (rest as any).wasImage = true;
+        }
+        return rest;
+      });
+      localStorage.setItem("chat_" + slug, JSON.stringify({
+        savedAt: Date.now(),
+        messages: msgsToSave
+      }));
+    }
+  }, [messages, slug]);
   const [inputMessage, setInputMessage] = useState("");
-  const [isTyping, setIsTyping] = useState(false);
+  const [isTyping, setIsTyping] = useState<false | "typing" | "sending_image">(false);
   const [activeReactionMenuMsgId, setActiveReactionMenuMsgId] = useState<string | null>(null);
   const chatScrollRef = useRef<HTMLDivElement>(null);
 
@@ -715,7 +779,7 @@ export default function CallSession() {
 
     // Delay 5 seconds before showing "... is typing" so it looks natural and human
     missedCallTypingTimeoutRef.current = setTimeout(() => {
-      setIsTyping(true);
+      setIsTyping("typing");
 
       // Natural typing duration of 2.8 seconds before delivering the follow-up message
       missedCallMessageTimeoutRef.current = setTimeout(() => {
@@ -892,7 +956,18 @@ export default function CallSession() {
       // 3. Typing indicator timing:
       const taskResult = evaluateMiniTaskAgent(newMsg.content, persona?.name);
       const isCallTask = taskResult.taskType === "CALL_USER";
-
+      const isDateReqEarly = isMeetUpOrDateRequest(newMsg.content);
+      const isManagerReqEarly = isManagerRequest(newMsg.content);
+      const isSocialReqEarly = isSocialMediaOrContactRequest(newMsg.content) || isDateReqEarly || isManagerReqEarly;
+      const isAdultPicReqEarly = isAdultPictureRequest(newMsg.content);
+      const hasOtherMeaningEarly = hasSubstantialNonAdultMeaning(newMsg.content);
+      const isAdultReqEarly = !isAdultPicReqEarly && isAdultWordMentioned(newMsg.content) && !hasOtherMeaningEarly;
+      const isVideoReqEarly = isVideoRequest(newMsg.content);
+      const isMediaReqEarly = !isSocialReqEarly && !isCallTask && !isAdultReqEarly && !isAdultPicReqEarly && isMediaOrImageRequest(newMsg.content);
+      const aiSentPhotosEarly = messages.filter((m) => m.role === "assistant" && ((m.attachmentUrl && (m.attachmentType === "image" || !m.attachmentType)) || m.wasImage));
+      const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const recentPhotos = aiSentPhotosEarly.filter(m => new Date(m.timestamp) > oneDayAgo);
+      const hasReachedPhotoLimitEarly = isMediaReqEarly && recentPhotos.length >= MAX_PHOTOS_PER_CHAT;
       // If it's a call task challenge ("prove you're not a bot" / "call me"):
       // Fast and snappy (1.2s - 2.0s) so she instantly accepts the challenge!
       // Attachment: 13s
@@ -904,7 +979,7 @@ export default function CallSession() {
         : Math.floor(Math.random() * (10000 - 5000 + 1)) + 5000; // 5000ms to 10000ms (5-10 seconds)
 
       const typingTimer = window.setTimeout(() => {
-        setIsTyping(true);
+        setIsTyping(((isMediaReqEarly && !hasReachedPhotoLimitEarly) || isAdultPicReqEarly) ? "sending_image" : "typing");
       }, typingDelay);
 
       // Typing duration (1.8s - 3s for call task, 3.5s - 5s for normal)
@@ -939,11 +1014,13 @@ export default function CallSession() {
           const isAdultReq = !isAdultPicReq && isAdultWordMentioned(newMsg.content) && !hasOtherMeaning;
           const isVideoReq = isVideoRequest(newMsg.content);
           const isMediaReq = !isSocialReq && !isCallTask && !isAdultReq && !isAdultPicReq && isMediaOrImageRequest(newMsg.content);
-          const aiSentPhotos = messages.filter((m) => m.role === "assistant" && m.attachmentUrl && (m.attachmentType === "image" || !m.attachmentType));
+          const aiSentPhotos = messages.filter((m) => m.role === "assistant" && ((m.attachmentUrl && (m.attachmentType === "image" || !m.attachmentType)) || m.wasImage));
           const aiPhotoCount = aiSentPhotos.length;
           const sentAttachmentUrls = aiSentPhotos.map((m) => m.attachmentUrl).filter(Boolean) as string[];
 
-          const hasReachedPhotoLimit = isMediaReq && aiPhotoCount >= MAX_PHOTOS_PER_CHAT;
+          const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        const recentPhotos = aiSentPhotos.filter(m => new Date(m.timestamp) > oneDayAgo);
+        const hasReachedPhotoLimit = isMediaReq && recentPhotos.length >= MAX_PHOTOS_PER_CHAT;
           // Send an image for regular media requests (under limit) OR when adult picture is requested (with rejection message)
           const profileImageAttachment = ((isMediaReq && !hasReachedPhotoLimit) || isAdultPicReq)
             ? selectProfileImageForChat(persona, sentAttachmentUrls)
@@ -1064,10 +1141,12 @@ export default function CallSession() {
         const isAdultReq = !isAdultPicReq && isAdultWordMentioned(newMsg.content) && !hasOtherMeaning;
         const isVideoReq = isVideoRequest(newMsg.content);
         const isMediaReq = !isSocialReq && !isCallTask && !isAdultReq && !isAdultPicReq && isMediaOrImageRequest(newMsg.content);
-        const aiSentPhotos = messages.filter((m) => m.role === "assistant" && m.attachmentUrl && (m.attachmentType === "image" || !m.attachmentType));
+        const aiSentPhotos = messages.filter((m) => m.role === "assistant" && ((m.attachmentUrl && (m.attachmentType === "image" || !m.attachmentType)) || m.wasImage));
         const aiPhotoCount = aiSentPhotos.length;
         const sentAttachmentUrls = aiSentPhotos.map((m) => m.attachmentUrl).filter(Boolean) as string[];
-        const hasReachedPhotoLimit = isMediaReq && aiPhotoCount >= MAX_PHOTOS_PER_CHAT;
+        const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        const recentPhotos = aiSentPhotos.filter(m => new Date(m.timestamp) > oneDayAgo);
+        const hasReachedPhotoLimit = isMediaReq && recentPhotos.length >= MAX_PHOTOS_PER_CHAT;
 
         // Send image for regular media requests (under limit) OR when adult picture is requested (with rejection message)
         const profileImageAttachment = ((isMediaReq && !hasReachedPhotoLimit) || isAdultPicReq)
@@ -1782,7 +1861,8 @@ export default function CallSession() {
 
           {/* Photos sent counter indicator */}
           {(() => {
-            const aiSentCount = messages.filter((m) => m.role === "assistant" && m.attachmentUrl && (m.attachmentType === "image" || !m.attachmentType)).length;
+            const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+            const aiSentCount = messages.filter((m) => m.role === "assistant" && ((m.attachmentUrl && (m.attachmentType === "image" || !m.attachmentType)) || m.wasImage) && new Date(m.timestamp) > oneDayAgo).length;
             if (aiSentCount === 0) return null;
             return (
               <div className="p-2.5 rounded-xl bg-pink-500/10 border border-pink-500/20 flex items-center justify-between text-xs text-pink-200 shadow-sm animate-in fade-in">
@@ -1800,7 +1880,7 @@ export default function CallSession() {
                     <ArrowRight className="w-3 h-3" />
                   </button>
                 ) : (
-                  <span className="text-[10px] text-pink-300/80">Max {MAX_PHOTOS_PER_CHAT} photos in chat</span>
+                  <span className="text-[10px] text-pink-300/80">Max {MAX_PHOTOS_PER_CHAT} photos per 24 hours</span>
                 )}
               </div>
             );
@@ -2085,7 +2165,7 @@ export default function CallSession() {
               </button>
               <div className="bg-white/10 rounded-2xl rounded-tl-none px-3.5 py-2.5 border border-white/10 flex items-center gap-2 shadow-sm">
                 <span className="text-[11px] text-purple-300 font-medium">
-                  {persona?.name || "She"} is typing
+                  {isTyping === "sending_image" ? `Sending image...` : `${persona?.name || "She"} is typing`}
                 </span>
                 <div className="flex items-center gap-1">
                   <div className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-bounce"></div>

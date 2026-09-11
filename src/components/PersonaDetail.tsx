@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from "react";
 import { useParams, Link, useNavigate, useSearchParams } from "react-router-dom";
+import { useAuth } from "../contexts/AuthContext";
 import { Persona } from "../types";
 import { DEFAULT_PERSONAS } from "../data/defaultPersonas";
 import { motion, AnimatePresence } from "framer-motion";
@@ -39,6 +40,7 @@ import {
 } from "../utils/personaStatus";
 
 export default function PersonaDetail() {
+  const { user, openAuthModal, loading: authLoading } = useAuth();
   const { slug } = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -52,6 +54,13 @@ export default function PersonaDetail() {
       ? tabParam
       : "about"
   );
+
+  useEffect(() => {
+    if (!authLoading && !user) {
+      openAuthModal("signin");
+      navigate("/");
+    }
+  }, [user, authLoading, navigate, openAuthModal]);
 
   useEffect(() => {
     if (tabParam && ["about", "personality", "interests", "photos", "conversation"].includes(tabParam)) {
@@ -380,7 +389,7 @@ export default function PersonaDetail() {
             <div className="flex items-center gap-2.5 shrink-0 pt-1 md:pt-0">
               {/* Start Call CTA (ONLY trigger call when clicked) */}
               <button
-                onClick={() => navigate(`/call/${persona.slug}`)}
+                onClick={() => user ? navigate(`/call/${persona.slug}`) : openAuthModal("signin")}
                 className="flex items-center gap-1.5 px-5 py-2.5 rounded-full text-xs font-semibold text-white bg-gradient-to-r from-[#e1147a] via-[#ec4899] to-[#9333ea] hover:opacity-95 shadow-md shadow-pink-500/25 hover:scale-[1.02] active:scale-95 transition-all cursor-pointer"
               >
                 <Phone className="w-3.5 h-3.5 fill-current" />
@@ -389,7 +398,7 @@ export default function PersonaDetail() {
 
               {/* Message Button */}
               <button
-                onClick={() => navigate(`/call/${persona.slug}?chat=true`)}
+                onClick={() => user ? navigate(`/call/${persona.slug}?chat=true`) : openAuthModal("signin")}
                 className="flex items-center gap-1.5 px-4 py-2.5 rounded-full text-xs font-medium text-white bg-white/[0.08] hover:bg-white/[0.14] border border-white/15 active:scale-95 transition-all cursor-pointer"
               >
                 <MessageSquare className="w-3.5 h-3.5" />
@@ -431,7 +440,7 @@ export default function PersonaDetail() {
                   onClick={() => {
                     setActiveTab(tab.id as any);
                     if (tab.id === "conversation") {
-                      navigate(`/call/${persona.slug}?chat=true`);
+                      if (user) { navigate(`/call/${persona.slug}?chat=true`); } else { openAuthModal("signin"); }
                     } else if (tab.id === "photos") {
                       const el = document.getElementById("photos-section");
                       if (el) el.scrollIntoView({ behavior: "smooth" });
