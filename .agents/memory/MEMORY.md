@@ -1,0 +1,1 @@
+- [Prisma raw SQL defaults](prisma-raw-sql-defaults.md) — direct inserts may need explicit UUID and updated timestamp values.

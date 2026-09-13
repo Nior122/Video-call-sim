@@ -784,10 +784,8 @@ async function seedDatabase() {
       new Promise((_, reject) => setTimeout(() => reject(new Error("DB connection timeout")), 3000))
     ]);
 
-    // 1. Delete all videos from all profiles
-    await prisma.personaVideo.deleteMany({});
-
-    // 2. Delete all other personas except pinkchyu and bigtittygothegg
+    // 1. Delete all other personas except pinkchyu and bigtittygothegg.
+    // Keep PersonaVideo rows intact so profile-specific call clips survive restarts.
     await prisma.persona.deleteMany({
       where: {
         slug: {
@@ -796,7 +794,7 @@ async function seedDatabase() {
       }
     });
 
-    // 3. Update/upsert the remaining profiles with fresh bio and media fields
+    // 2. Update/upsert the remaining profiles with fresh bio and media fields
     for (const p of DEFAULT_PERSONAS) {
       const existing = await prisma.persona.findUnique({
         where: { slug: p.slug }
