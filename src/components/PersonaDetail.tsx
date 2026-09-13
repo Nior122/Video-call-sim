@@ -92,6 +92,22 @@ export default function PersonaDetail() {
   }, [slug]);
 
   useEffect(() => {
+    if (persona) {
+      document.title = `${persona.name} - ${persona.occupation || "Profile"} | Dream Babe`;
+      let canonicalLink = document.querySelector('link[rel="canonical"]') as HTMLLinkElement | null;
+      if (!canonicalLink) {
+        canonicalLink = document.createElement("link");
+        canonicalLink.rel = "canonical";
+        document.head.appendChild(canonicalLink);
+      }
+      canonicalLink.href = `https://dreambabe.pages.dev/dreamgirl/${persona.slug}`;
+    }
+    return () => {
+      document.title = "Dream Babe";
+    };
+  }, [persona]);
+
+  useEffect(() => {
     if (slug) {
       setStatus(getPersonaOnlineStatus(slug));
       const unsubscribe = subscribeToPersonaStatus((s, newStatus) => {

@@ -1,5 +1,6 @@
 import express from "express";
 import path from "path";
+import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import { PrismaClient } from "@prisma/client";
 import { z } from "zod";
@@ -41,11 +42,82 @@ const PORT = 3000;
 // In-memory cache/fallback in case database is initializing or unavailable
 let inMemoryPersonas = [...DEFAULT_PERSONAS];
 
+const SITEMAP_BASE_URL = "https://dreambabe.pages.dev";
+
+async function getAllActiveSlugs(): Promise<string[]> {
+  const slugs = new Set<string>();
+  try {
+    const dbPersonas = await prisma.persona.findMany({
+      where: { active: true },
+      select: { slug: true }
+    });
+    dbPersonas.forEach((p) => {
+      if (p.slug) slugs.add(p.slug.toLowerCase());
+    });
+  } catch (err) {
+    console.warn("Could not query DB for slugs, using in-memory list:", err);
+  }
+
+  inMemoryPersonas.forEach((p) => {
+    if (p.active && p.slug) slugs.add(p.slug.toLowerCase());
+  });
+
+  return Array.from(slugs);
+}
+
+function buildSitemapXml(slugs: string[]): string {
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${slugs
+  .map(
+    (slug) => `  <url>
+    <loc>${SITEMAP_BASE_URL}/dreamgirl/${slug}</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+  </url>`
+  )
+  .join("\n")}
+</urlset>
+`;
+}
+
+async function syncSitemapFile(): Promise<void> {
+  try {
+    const slugs = await getAllActiveSlugs();
+    const xml = buildSitemapXml(slugs);
+    const publicPath = path.join(process.cwd(), "public", "sitemap.xml");
+    const distPath = path.join(process.cwd(), "dist", "sitemap.xml");
+
+    if (fs.existsSync(path.dirname(publicPath))) {
+      fs.writeFileSync(publicPath, xml, "utf8");
+    }
+    if (fs.existsSync(path.dirname(distPath))) {
+      fs.writeFileSync(distPath, xml, "utf8");
+    }
+  } catch (err) {
+    console.warn("Notice syncing sitemap file:", err);
+  }
+}
+
 app.use(express.json());
 
 // Health check endpoint
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok" });
+});
+
+// Dynamic sitemap endpoint containing ONLY profile URLs (all existing and future personas)
+app.get("/sitemap.xml", async (req, res) => {
+  try {
+    const slugs = await getAllActiveSlugs();
+    const xml = buildSitemapXml(slugs);
+    res.header("Content-Type", "application/xml; charset=utf-8");
+    res.header("Cache-Control", "public, max-age=3600, s-maxage=3600");
+    return res.send(xml);
+  } catch (error) {
+    console.error("Error generating sitemap:", error);
+    res.status(500).send("Error generating sitemap");
+  }
 });
 
 // Auth middleware for admin
@@ -112,6 +184,9 @@ app.post("/api/admin/personas", adminAuth, async (req, res) => {
   try {
     const data = createPersonaSchema.parse(req.body);
     const persona = await prisma.persona.create({ data });
+    // Keep in-memory personas and sitemap synced
+    inMemoryPersonas = [persona as any, ...inMemoryPersonas.filter(p => p.id !== persona.id)];
+    syncSitemapFile().catch(console.warn);
     res.json(persona);
   } catch (error) {
     res.status(400).json({ error: "Invalid data" });
@@ -125,6 +200,8 @@ app.patch("/api/admin/personas/:id", adminAuth, async (req, res) => {
       where: { id: req.params.id },
       data: req.body
     });
+    inMemoryPersonas = inMemoryPersonas.map(p => p.id === persona.id ? { ...p, ...persona } as any : p);
+    syncSitemapFile().catch(console.warn);
     res.json(persona);
   } catch (error) {
     res.status(400).json({ error: "Update failed" });
@@ -135,6 +212,8 @@ app.patch("/api/admin/personas/:id", adminAuth, async (req, res) => {
 app.delete("/api/admin/personas/:id", adminAuth, async (req, res) => {
   try {
     await prisma.persona.delete({ where: { id: req.params.id } });
+    inMemoryPersonas = inMemoryPersonas.filter(p => p.id !== req.params.id);
+    syncSitemapFile().catch(console.warn);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: "Delete failed" });

@@ -1,4 +1,9 @@
 User-agent: *
+Allow: /dreamgirl/
+Allow: /persona/
 Allow: /
+Disallow: /call/
+Disallow: /admin
+Disallow: /api/
 
 Sitemap: https://dreambabe.pages.dev/sitemap.xml
