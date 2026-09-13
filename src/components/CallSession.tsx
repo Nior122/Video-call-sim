@@ -474,6 +474,7 @@ export default function CallSession() {
     }
   }, [inputMessage]);
 
+
   // Initialize Persona on mount; only trigger call if not opened in chat-only mode
   useEffect(() => {
     let mounted = true;

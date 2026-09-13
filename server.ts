@@ -42,7 +42,7 @@ dotenv.config();
 
 const prisma = new PrismaClient();
 const app = express();
-const PORT = 5000;
+const PORT = Number(process.env.PORT) || 3000;
 
 // In-memory cache/fallback in case database is initializing or unavailable
 let inMemoryPersonas = [...DEFAULT_PERSONAS];
@@ -844,6 +844,23 @@ async function seedDatabase() {
             active: true
           }
         });
+
+        // Sync default videos in DB so they always match fresh persona video list
+        if (p.videos && p.videos.length > 0) {
+          await prisma.personaVideo.deleteMany({
+            where: { personaId: existing.id }
+          });
+          for (const v of p.videos) {
+            await prisma.personaVideo.create({
+              data: {
+                personaId: existing.id,
+                title: v.title,
+                url: v.url,
+                active: true
+              }
+            });
+          }
+        }
       } else {
         await prisma.persona.create({
           data: {
@@ -885,7 +902,14 @@ async function seedDatabase() {
             flirtLevel: p.flirtLevel,
             emojiFrequency: p.emojiFrequency,
             systemPrompt: p.systemPrompt,
-            active: true
+            active: true,
+            videos: {
+              create: (p.videos || []).map((v) => ({
+                title: v.title,
+                url: v.url,
+                active: true
+              }))
+            }
           }
         });
       }

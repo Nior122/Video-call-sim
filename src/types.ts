@@ -63,8 +63,8 @@ export interface PersonaVideo {
   streamUrl?: string | null;
   title: string;
   active: boolean;
-  createdAt: string;
-  updatedAt: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface ChatReaction {

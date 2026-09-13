@@ -105,6 +105,35 @@ export const DEFAULT_PERSONAS: Persona[] = [
     active: true,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
-    videos: []
+    videos: [
+      {
+        id: "pinkchyu-vid-1",
+        personaId: "persona-pinkchyu-6",
+        title: "Pinkchyu Cam Session 1",
+        url: "https://rubyvidhub.com/embed-aau1rmpdbpz8.html",
+        active: true
+      },
+      {
+        id: "pinkchyu-vid-2",
+        personaId: "persona-pinkchyu-6",
+        title: "Pinkchyu Cam Session 2",
+        url: "https://rubyvidhub.com/embed-cdekz3hyum5g.html",
+        active: true
+      },
+      {
+        id: "pinkchyu-vid-3",
+        personaId: "persona-pinkchyu-6",
+        title: "Pinkchyu Cam Session 3",
+        url: "https://rubyvidhub.com/embed-24phdls16ell.html",
+        active: true
+      },
+      {
+        id: "pinkchyu-vid-4",
+        personaId: "persona-pinkchyu-6",
+        title: "Pinkchyu Cam Session 4",
+        url: "https://rubyvidhub.com/embed-96lkt4alkfnd.html",
+        active: true
+      }
+    ]
   }
 ];
