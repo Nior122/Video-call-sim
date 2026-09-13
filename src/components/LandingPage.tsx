@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "../contexts/AuthContext";
 import { Persona } from "../types";
 import { DEFAULT_PERSONAS } from "../data/defaultPersonas";
 import { motion, AnimatePresence } from "framer-motion";
@@ -22,7 +21,7 @@ import { getPersonaOnlineStatus } from "../utils/personaStatus";
 
 export default function LandingPage() {
   const navigate = useNavigate();
-  const { user, openAuthModal } = useAuth();
+  
   const [featuredPersonas, setFeaturedPersonas] = useState<Persona[]>(() => DEFAULT_PERSONAS);
   const [showHowItWorksModal, setShowHowItWorksModal] = useState(false);
 
@@ -143,7 +142,7 @@ export default function LandingPage() {
               return (
                 <div
                   key={p.id}
-                  onClick={() => user ? navigate(`/dreamgirl/${p.slug}`) : openAuthModal("signin")}
+                  onClick={() => navigate(`/dreamgirl/${p.slug}`)}
                   className="group relative rounded-2xl overflow-hidden bg-[#0d0f1a] border border-white/[0.08] hover:border-pink-500/50 cursor-pointer shadow-xl transition-all duration-300 hover:-translate-y-1.5 flex flex-col"
                 >
                   {/* Bigger Image Portrait */}

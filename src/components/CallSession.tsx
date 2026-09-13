@@ -1,6 +1,5 @@
 import { useEffect, useState, useRef, FormEvent, ChangeEvent } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
-import { useAuth } from "../contexts/AuthContext";
 import { Persona, ChatMessage, CallState, CALL_CONFIG, PersonaVideo } from "../types";
 import { DEFAULT_PERSONAS } from "../data/defaultPersonas";
 import { motion, AnimatePresence } from "framer-motion";
@@ -87,7 +86,7 @@ const SHOCKING_LOVE_IT_MESSAGES = [
 ];
 
 export default function CallSession() {
-  const { user, openAuthModal, loading: authLoading } = useAuth();
+  
   const { slug } = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -121,13 +120,6 @@ export default function CallSession() {
     getPersonaOnlineStatus(slug)
   );
   const pendingOfflineRepliesRef = useRef<Array<() => void>>([]);
-
-  useEffect(() => {
-    if (!authLoading && !user) {
-      openAuthModal("signin");
-      navigate(`/dreamgirl/${slug}`);
-    }
-  }, [user, authLoading, navigate, openAuthModal, slug]);
 
   useEffect(() => {
     if (slug) {
