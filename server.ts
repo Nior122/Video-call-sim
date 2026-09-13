@@ -1,12 +1,17 @@
 import express from "express";
 import path from "path";
 import fs from "fs";
+import dns from "dns";
+import { Readable } from "stream";
+
+dns.setDefaultResultOrder("ipv4first");
 import { createServer as createViteServer } from "vite";
 import { PrismaClient } from "@prisma/client";
 import { z } from "zod";
 import dotenv from "dotenv";
 import { generatePersonaResponse } from "./src/lib/ai/provider";
 import { DEFAULT_PERSONAS } from "./src/data/defaultPersonas";
+import { Persona } from "./src/types";
 import {
   isMediaOrImageRequest,
   isVideoRequest,
@@ -290,9 +295,13 @@ app.get("/api/personas", async (req, res) => {
       select: {
         id: true, name: true, slug: true, description: true, 
         profileImage: true, coverImage: true, personality: true, interests: true,
-        age: true, city: true, country: true, occupation: true,
+        age: true, city: true, country: true, occupation: true, languages: true,
         shortBio: true, longBio: true, hobbies: true, likes: true, dislikes: true,
         speakingStyle: true, communicationTone: true, flirtLevel: true, emojiFrequency: true,
+        bodyType: true, bustSize: true, height: true, eyeColor: true, hairColor: true,
+        tattoosAndPiercings: true, turnOns: true, turnOffs: true, fantasies: true,
+        intimacyStyle: true, preferredVibe: true, kinksAndFetishes: true,
+        favoriteLingerie: true, eroticInterests: true,
         gallery: true, active: true, createdAt: true, updatedAt: true
       }
     });
@@ -304,6 +313,239 @@ app.get("/api/personas", async (req, res) => {
   }
   // Return in-memory fallback
   res.json(inMemoryPersonas.filter(p => p.active));
+});
+
+const streamResolutionCache = new Map<string, { streamUrl: string; expiresAt: number }>();
+
+async function resolveVideoStream(embedUrl: string, forceFresh = false): Promise<string | null> {
+  if (!embedUrl) return null;
+  let trimmed = embedUrl.trim();
+
+  // If already an hls-proxy URL with query params, extract real target/embed URL
+  if (trimmed.includes("embedUrl=")) {
+    try {
+      const parsed = new URL(trimmed, "http://localhost:3000");
+      const inner = parsed.searchParams.get("embedUrl");
+      if (inner) trimmed = inner.trim();
+    } catch {
+      const match = trimmed.match(/embedUrl=([^&]+)/);
+      if (match) trimmed = decodeURIComponent(match[1]).trim();
+    }
+  } else if (trimmed.includes("url=")) {
+    try {
+      const parsed = new URL(trimmed, "http://localhost:3000");
+      const inner = parsed.searchParams.get("url");
+      if (inner) trimmed = inner.trim();
+    } catch {
+      const match = trimmed.match(/url=([^&]+)/);
+      if (match) trimmed = decodeURIComponent(match[1]).trim();
+    }
+  }
+
+  if (
+    trimmed.endsWith(".mp4") ||
+    trimmed.endsWith(".webm") ||
+    trimmed.includes(".m3u8") ||
+    trimmed.startsWith("/videos/") ||
+    (trimmed.startsWith("/") && !trimmed.startsWith("//"))
+  ) {
+    return trimmed;
+  }
+
+  if (!trimmed.startsWith("http://") && !trimmed.startsWith("https://")) {
+    return null;
+  }
+
+  if (!forceFresh) {
+    const cached = streamResolutionCache.get(trimmed);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.streamUrl;
+    }
+  }
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 6000);
+    const res = await fetch(trimmed, {
+      signal: controller.signal,
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        Referer: "https://rubyvidhub.com/",
+      },
+    });
+    clearTimeout(timeout);
+    if (!res.ok) return null;
+    const text = await res.text();
+    const match = text.match(/eval\(function\(p,a,c,k,e,d\)[\s\S]*?\.split\('\|'\)\)\)/);
+    if (match) {
+      const code = match[0].replace(/^eval/, "");
+      // eslint-disable-next-line no-eval
+      const unpacked = eval(code);
+      const m3u8Match = typeof unpacked === "string" ? unpacked.match(/https?:[^\s"'\\]+\.m3u8[^\s"'\\]*/) : null;
+      if (m3u8Match) {
+        const streamUrl = m3u8Match[0];
+        streamResolutionCache.set(trimmed, { streamUrl, expiresAt: Date.now() + 15 * 60 * 1000 });
+        return streamUrl;
+      }
+    }
+  } catch (err) {
+    console.warn("Could not resolve video embed stream:", err);
+  }
+  return null;
+}
+
+async function handleProxyResponse(
+  resolvedUrl: string,
+  remoteRes: globalThis.Response,
+  res: express.Response
+) {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "*");
+
+  const contentType = remoteRes.headers.get("content-type") || "";
+  const isM3u8 =
+    resolvedUrl.includes(".m3u8") ||
+    contentType.includes("mpegurl") ||
+    contentType.includes("application/x-mpegURL");
+
+  if (isM3u8) {
+    const text = await remoteRes.text();
+    // Rewrite all nested .m3u8 and .ts URLs inside the manifest to route through /api/hls-proxy
+    const baseUrl = new URL(resolvedUrl);
+    const rewritten = text.replace(
+      /(https?:\/\/[^\s\r\n"']+\.(?:m3u8|ts)[^\s\r\n"']*|[^\s\r\n"']+\.(?:m3u8|ts)[^\s\r\n"']*)/g,
+      (match) => {
+        let fullUrl = match;
+        if (!match.startsWith("http://") && !match.startsWith("https://")) {
+          try {
+            fullUrl = new URL(match, baseUrl).href;
+          } catch {
+            fullUrl = match;
+          }
+        }
+        return `/api/hls-proxy?url=${encodeURIComponent(fullUrl)}`;
+      }
+    );
+
+    res.setHeader("Content-Type", "application/vnd.apple.mpegurl");
+    res.setHeader("Cache-Control", "no-cache");
+    return res.send(rewritten);
+  } else {
+    // Media binary (.ts segment or direct video stream)
+    if (contentType) {
+      res.setHeader("Content-Type", contentType);
+    } else {
+      res.setHeader("Content-Type", "video/mp2t");
+    }
+    const contentLength = remoteRes.headers.get("content-length");
+    if (contentLength) res.setHeader("Content-Length", contentLength);
+    const contentRange = remoteRes.headers.get("content-range");
+    if (contentRange) res.setHeader("Content-Range", contentRange);
+    const acceptRanges = remoteRes.headers.get("accept-ranges");
+    if (acceptRanges) res.setHeader("Accept-Ranges", acceptRanges);
+    res.setHeader("Cache-Control", "public, max-age=86400");
+
+    if (remoteRes.body) {
+      const nodeStream = Readable.fromWeb(remoteRes.body as any);
+      nodeStream.pipe(res);
+    } else {
+      res.end();
+    }
+  }
+}
+
+app.get("/api/hls-proxy", async (req, res) => {
+  let embedUrl = (req.query.embedUrl as string) || "";
+  let targetUrl = (req.query.url as string) || "";
+
+  // Unwrap any nested embedUrl query parameter
+  while (embedUrl.includes("embedUrl=")) {
+    try {
+      const parsed = new URL(embedUrl, "http://localhost:3000");
+      const inner = parsed.searchParams.get("embedUrl");
+      if (inner && inner !== embedUrl) {
+        embedUrl = inner;
+      } else {
+        break;
+      }
+    } catch {
+      const m = embedUrl.match(/embedUrl=([^&]+)/);
+      if (m) {
+        const decoded = decodeURIComponent(m[1]);
+        if (decoded !== embedUrl) {
+          embedUrl = decoded;
+          continue;
+        }
+      }
+      break;
+    }
+  }
+
+  try {
+    let resolvedTarget = targetUrl;
+    if (embedUrl) {
+      resolvedTarget = (await resolveVideoStream(embedUrl)) || "";
+    }
+
+    if (!resolvedTarget) {
+      return res.status(404).send("Stream URL not found");
+    }
+
+    const headers: Record<string, string> = {
+      "User-Agent":
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      Referer: "https://rubyvidhub.com/",
+    };
+
+    if (req.headers.range) {
+      headers["Range"] = req.headers.range as string;
+    }
+
+    let remoteRes = await fetch(resolvedTarget, { headers });
+
+    // If stream expired, clear cache and retry fresh resolution if embedUrl is known
+    if (!remoteRes.ok && (embedUrl || resolvedTarget.includes("streamruby"))) {
+      if (embedUrl) {
+        streamResolutionCache.delete(embedUrl.trim());
+        const fresh = await resolveVideoStream(embedUrl, true);
+        if (fresh && fresh !== resolvedTarget) {
+          resolvedTarget = fresh;
+          remoteRes = await fetch(resolvedTarget, { headers });
+        }
+      }
+    }
+
+    if (!remoteRes.ok) {
+      return res.status(remoteRes.status).send(remoteRes.statusText);
+    }
+
+    return await handleProxyResponse(resolvedTarget, remoteRes, res);
+  } catch (err: any) {
+    console.error("HLS proxy error:", err);
+    return res.status(500).send("Proxy error");
+  }
+});
+
+app.get("/api/resolve-video-stream", async (req, res) => {
+  const rawUrl = req.query.url as string;
+  if (!rawUrl) {
+    return res.status(400).json({ error: "Missing url parameter" });
+  }
+  try {
+    const trimmed = rawUrl.trim();
+    if (trimmed.startsWith("/api/hls-proxy")) {
+      return res.json({ streamUrl: trimmed });
+    }
+    if (trimmed.includes("rubyvidhub") || trimmed.includes("embed") || trimmed.includes(".html")) {
+      return res.json({ streamUrl: `/api/hls-proxy?embedUrl=${encodeURIComponent(trimmed)}` });
+    }
+    const streamUrl = await resolveVideoStream(trimmed);
+    return res.json({ streamUrl: streamUrl || trimmed });
+  } catch (err) {
+    return res.json({ streamUrl: rawUrl });
+  }
 });
 
 app.get("/api/personas/:slug", async (req, res) => {
@@ -319,7 +561,17 @@ app.get("/api/personas/:slug", async (req, res) => {
     });
     if (persona && persona.active) {
       const { systemPrompt, ...publicPersona } = persona;
-      return res.json(publicPersona);
+      const videosWithStreams = (publicPersona.videos || []).map((v) => {
+        let streamUrl = v.url;
+        if (v.url.includes("rubyvidhub") || v.url.includes("embed") || v.url.includes(".html")) {
+          streamUrl = `/api/hls-proxy?embedUrl=${encodeURIComponent(v.url)}`;
+        }
+        return {
+          ...v,
+          streamUrl
+        };
+      });
+      return res.json({ ...publicPersona, videos: videosWithStreams });
     }
   } catch (error) {
     console.warn("Prisma error in /api/personas/:slug, searching fallback:", error);
@@ -329,7 +581,17 @@ app.get("/api/personas/:slug", async (req, res) => {
   const found = inMemoryPersonas.find((p) => p.slug.toLowerCase() === reqSlug);
   if (found && found.active) {
     const { systemPrompt, ...publicPersona } = found;
-    return res.json(publicPersona);
+    const videosWithStreams = (publicPersona.videos || []).map((v) => {
+      let streamUrl = v.url;
+      if (v.url.includes("rubyvidhub") || v.url.includes("embed") || v.url.includes(".html")) {
+        streamUrl = `/api/hls-proxy?embedUrl=${encodeURIComponent(v.url)}`;
+      }
+      return {
+        ...v,
+        streamUrl
+      };
+    });
+    return res.json({ ...publicPersona, videos: videosWithStreams });
   }
 
   res.status(404).json({ error: "Persona not found" });
@@ -509,56 +771,157 @@ app.post("/api/chat", async (req, res) => {
 
 
 async function seedDatabase() {
+  if (!process.env.DATABASE_URL) {
+    console.log("No DATABASE_URL configured; using in-memory personas.");
+    return;
+  }
   try {
-    const count = await prisma.persona.count();
-    if (count > 0) return;
+    console.log("Synchronizing personas: keeping only pinkchyu and bigtittygothegg, clearing all media...");
 
-    console.log("Seeding database with demo personas...");
+    // Quick test query with timeout
+    await Promise.race([
+      prisma.$connect(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("DB connection timeout")), 3000))
+    ]);
 
-    for (const p of DEFAULT_PERSONAS) {
-      const created = await prisma.persona.create({
-        data: {
-          name: p.name,
-          slug: p.slug,
-          description: p.description,
-          profileImage: p.profileImage,
-          coverImage: p.coverImage,
-          gallery: p.gallery,
-          age: p.age,
-          city: p.city,
-          country: p.country,
-          occupation: p.occupation,
-          shortBio: p.shortBio,
-          longBio: p.longBio,
-          personality: p.personality,
-          background: p.background,
-          interests: p.interests,
-          hobbies: p.hobbies,
-          likes: p.likes,
-          dislikes: p.dislikes,
-          speakingStyle: p.speakingStyle,
-          communicationTone: p.communicationTone,
-          flirtLevel: p.flirtLevel,
-          emojiFrequency: p.emojiFrequency,
-          systemPrompt: p.systemPrompt,
-          active: true
-        }
-      });
+    // 1. Delete all videos from all profiles
+    await prisma.personaVideo.deleteMany({});
 
-      if (p.videos && p.videos.length > 0) {
-        for (const v of p.videos) {
-          await prisma.personaVideo.create({
-            data: {
-              personaId: created.id,
-              title: v.title,
-              url: v.url,
-              active: true
-            }
-          });
+    // 2. Delete all other personas except pinkchyu and bigtittygothegg
+    await prisma.persona.deleteMany({
+      where: {
+        slug: {
+          notIn: ["pinkchyu", "bigtittygothegg"]
         }
       }
+    });
+
+    // 3. Update/upsert the remaining profiles with fresh bio fields and empty media
+    for (const p of DEFAULT_PERSONAS) {
+      const existing = await prisma.persona.findUnique({
+        where: { slug: p.slug }
+      });
+
+      if (existing) {
+        await prisma.persona.update({
+          where: { slug: p.slug },
+          data: {
+            name: p.name,
+            description: p.description,
+            profileImage: null,
+            coverImage: null,
+            gallery: "",
+            shortBio: p.shortBio,
+            longBio: p.longBio,
+            personality: p.personality,
+            background: p.background,
+            interests: p.interests,
+            hobbies: p.hobbies,
+            likes: p.likes,
+            dislikes: p.dislikes,
+            speakingStyle: p.speakingStyle,
+            communicationTone: p.communicationTone,
+            flirtLevel: p.flirtLevel,
+            emojiFrequency: p.emojiFrequency,
+            systemPrompt: p.systemPrompt,
+            occupation: p.occupation,
+            languages: p.languages,
+            age: p.age,
+            city: p.city,
+            country: p.country,
+            bodyType: p.bodyType,
+            bustSize: p.bustSize,
+            height: p.height,
+            eyeColor: p.eyeColor,
+            hairColor: p.hairColor,
+            tattoosAndPiercings: p.tattoosAndPiercings,
+            turnOns: p.turnOns,
+            turnOffs: p.turnOffs,
+            fantasies: p.fantasies,
+            intimacyStyle: p.intimacyStyle,
+            preferredVibe: p.preferredVibe,
+            kinksAndFetishes: p.kinksAndFetishes,
+            favoriteLingerie: p.favoriteLingerie,
+            eroticInterests: p.eroticInterests,
+            active: true
+          }
+        });
+      } else {
+        await prisma.persona.create({
+          data: {
+            name: p.name,
+            slug: p.slug,
+            description: p.description,
+            profileImage: null,
+            coverImage: null,
+            gallery: "",
+            age: p.age,
+            city: p.city,
+            country: p.country,
+            occupation: p.occupation,
+            languages: p.languages,
+            shortBio: p.shortBio,
+            longBio: p.longBio,
+            bodyType: p.bodyType,
+            bustSize: p.bustSize,
+            height: p.height,
+            eyeColor: p.eyeColor,
+            hairColor: p.hairColor,
+            tattoosAndPiercings: p.tattoosAndPiercings,
+            turnOns: p.turnOns,
+            turnOffs: p.turnOffs,
+            fantasies: p.fantasies,
+            intimacyStyle: p.intimacyStyle,
+            preferredVibe: p.preferredVibe,
+            kinksAndFetishes: p.kinksAndFetishes,
+            favoriteLingerie: p.favoriteLingerie,
+            eroticInterests: p.eroticInterests,
+            personality: p.personality,
+            background: p.background,
+            interests: p.interests,
+            hobbies: p.hobbies,
+            likes: p.likes,
+            dislikes: p.dislikes,
+            speakingStyle: p.speakingStyle,
+            communicationTone: p.communicationTone,
+            flirtLevel: p.flirtLevel,
+            emojiFrequency: p.emojiFrequency,
+            systemPrompt: p.systemPrompt,
+            active: true
+          }
+        });
+      }
     }
-    console.log("Database seeded successfully.");
+
+    // Refresh in-memory list from database or default
+    try {
+      const dbPersonas = await prisma.persona.findMany({
+        where: { active: true },
+        include: { videos: true }
+      });
+      if (dbPersonas && dbPersonas.length > 0) {
+        inMemoryPersonas = dbPersonas.map(p => ({
+          ...p,
+          profileImage: p.profileImage || "",
+          coverImage: p.coverImage || "",
+          gallery: p.gallery || "",
+          createdAt: p.createdAt instanceof Date ? p.createdAt.toISOString() : String(p.createdAt),
+          updatedAt: p.updatedAt instanceof Date ? p.updatedAt.toISOString() : String(p.updatedAt),
+          videos: (p.videos || []).map(v => ({
+            ...v,
+            createdAt: v.createdAt instanceof Date ? v.createdAt.toISOString() : String(v.createdAt),
+            updatedAt: v.updatedAt instanceof Date ? v.updatedAt.toISOString() : String(v.updatedAt),
+          }))
+        })) as unknown as Persona[];
+      } else {
+        inMemoryPersonas = JSON.parse(JSON.stringify(DEFAULT_PERSONAS));
+      }
+    } catch {
+      inMemoryPersonas = JSON.parse(JSON.stringify(DEFAULT_PERSONAS));
+    }
+
+    await syncSitemapFile();
+    console.log("Database personas wiped and synced successfully. Remaining profiles: pinkchyu, bigtittygothegg (no media).");
   } catch (err) {
     console.warn("Database initialization notice (using in-memory fallback):", err);
   }
@@ -568,7 +931,7 @@ async function seedDatabase() {
 // VITE MIDDLEWARE & FALLBACK
 // --------------------------------------------------
 async function startServer() {
-  await seedDatabase();
+  seedDatabase().catch(err => console.warn("Background seed notice:", err));
 
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({

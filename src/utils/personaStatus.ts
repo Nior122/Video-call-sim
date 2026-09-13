@@ -8,18 +8,8 @@ export interface PersonaOnlineStatus {
 
 // Preset default schedules / realistic statuses based on slug
 const DEFAULT_STATUS_MAP: Record<string, { isOnline: boolean; lastSeenMinutes: number }> = {
-  maya: { isOnline: true, lastSeenMinutes: 0 },
-  sofia: { isOnline: false, lastSeenMinutes: 14 },
-  aria: { isOnline: true, lastSeenMinutes: 0 },
-  zara: { isOnline: false, lastSeenMinutes: 45 },
-  chloe: { isOnline: true, lastSeenMinutes: 0 },
-  elena: { isOnline: false, lastSeenMinutes: 120 },
-  layla: { isOnline: true, lastSeenMinutes: 0 },
-  yuki: { isOnline: false, lastSeenMinutes: 18 },
-  amara: { isOnline: true, lastSeenMinutes: 0 },
-  valentina: { isOnline: false, lastSeenMinutes: 65 },
-  isabella: { isOnline: true, lastSeenMinutes: 0 },
-  hannah: { isOnline: false, lastSeenMinutes: 240 },
+  pinkchyu: { isOnline: true, lastSeenMinutes: 0 },
+  bigtittygothegg: { isOnline: true, lastSeenMinutes: 0 },
 };
 
 function formatLastSeen(minutesAgo: number): string {

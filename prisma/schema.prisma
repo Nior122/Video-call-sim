@@ -25,9 +25,30 @@ model Persona {
   city          String?
   country       String?
   occupation    String?
+  languages     String?
   
   shortBio      String?
   longBio       String?
+
+  // Physical attributes
+  bodyType            String?
+  bustSize            String?
+  height              String?
+  eyeColor            String?
+  hairColor           String?
+  tattoosAndPiercings String?
+
+  // Suggestive bio & intimacy fields
+  turnOns             String?
+  turnOffs            String?
+  fantasies           String?
+  intimacyStyle       String?
+  preferredVibe       String?
+
+  // Specialized erotic interests
+  kinksAndFetishes    String?
+  favoriteLingerie    String?
+  eroticInterests     String?
 
   personality   String
   interests     String

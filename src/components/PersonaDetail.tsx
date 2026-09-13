@@ -28,7 +28,12 @@ import {
   Wine,
   Sparkles,
   ExternalLink,
-  RefreshCw
+  RefreshCw,
+  Flame,
+  Eye,
+  Ruler,
+  Feather,
+  Lock
 } from "lucide-react";
 import Footer from "./Footer";
 import {
@@ -47,15 +52,15 @@ export default function PersonaDetail() {
   const [persona, setPersona] = useState<Persona | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<
-    "about" | "personality" | "interests" | "photos" | "conversation"
+    "about" | "physical" | "intimacy" | "personality" | "interests" | "photos" | "conversation"
   >(
-    tabParam && ["about", "personality", "interests", "photos", "conversation"].includes(tabParam)
+    tabParam && ["about", "physical", "intimacy", "personality", "interests", "photos", "conversation"].includes(tabParam)
       ? tabParam
       : "about"
   );
 
   useEffect(() => {
-    if (tabParam && ["about", "personality", "interests", "photos", "conversation"].includes(tabParam)) {
+    if (tabParam && ["about", "physical", "intimacy", "personality", "interests", "photos", "conversation"].includes(tabParam)) {
       setActiveTab(tabParam);
     }
   }, [tabParam]);
@@ -138,19 +143,9 @@ export default function PersonaDetail() {
       });
     }
 
-    // Ensure we have at least 5 images for the 5-image grid
-    const defaults = [
-      "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=800&auto=format&fit=crop",
-      "https://images.unsplash.com/photo-1517841905240-472988babdf9?q=80&w=800&auto=format&fit=crop",
-      "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?q=80&w=800&auto=format&fit=crop",
-      "https://images.unsplash.com/photo-1529626455594-4ff0802cfb7e?q=80&w=800&auto=format&fit=crop",
-      "https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=800&auto=format&fit=crop"
-    ];
-
-    for (const d of defaults) {
-      if (list.length < 5 && !list.includes(d)) {
-        list.push(d);
-      }
+    // If persona has no images configured, return empty array
+    if (list.length === 0) {
+      return [];
     }
 
     return list;
@@ -167,10 +162,10 @@ export default function PersonaDetail() {
     const seed = persona.name.length;
     return [
       { label: "Confidence", score: `${8 + (seed % 2)}/10`, emoji: "🔥" },
+      { label: "Sensuality", score: "10/10", emoji: "💋" },
       { label: "Playfulness", score: `${9 - (seed % 2)}/10`, emoji: "😄" },
-      { label: "Humor", score: `${7 + (seed % 3)}/10`, emoji: "🤗" },
-      { label: "Romantic", score: `${8 + (seed % 2)}/10`, emoji: "💖" },
-      { label: "Energy", score: `${9 - (seed % 2)}/10`, emoji: "⚡" }
+      { label: "Wild Desire", score: `${9 + (seed % 2)}/10`, emoji: "😈" },
+      { label: "Intimacy", score: `${8 + (seed % 3)}/10`, emoji: "💖" }
     ];
   }, [persona]);
 
@@ -189,14 +184,11 @@ export default function PersonaDetail() {
   const parsedInterests = useMemo(() => {
     if (!persona?.interests) {
       return [
-        { label: "Music", icon: Music },
-        { label: "Fashion", icon: Shirt },
-        { label: "Travel", icon: Plane },
-        { label: "Movies", icon: Film },
-        { label: "Food", icon: Utensils },
-        { label: "Photography", icon: Camera },
-        { label: "Technology", icon: Laptop },
-        { label: "Nightlife", icon: Wine }
+        { label: "Sensual Teasing", icon: Flame },
+        { label: "Silk Lingerie", icon: Shirt },
+        { label: "Private Video Calls", icon: MessageSquare },
+        { label: "Nightlife", icon: Wine },
+        { label: "Erotic Whispers", icon: Sparkles }
       ];
     }
     return persona.interests
@@ -209,9 +201,28 @@ export default function PersonaDetail() {
       }));
   }, [persona]);
 
+  const navTabs = useMemo(() => {
+    return [
+      { id: "about", label: "About & Confessions", icon: User, target: "about-section" },
+      { id: "physical", label: "Physical Attributes", icon: Sparkles, target: "physical-section" },
+      { id: "intimacy", label: "Desires & Erotic", icon: Flame, target: "intimacy-section" },
+      { id: "personality", label: "Personality", icon: Sun, target: "personality-section" },
+      { id: "interests", label: "Interests & Hobbies", icon: Heart, target: "interests-section" },
+      { id: "photos", label: galleryImages.length > 0 ? `Photos (${galleryImages.length})` : "Photos", icon: ImageIcon, target: "photos-section" },
+      { id: "conversation", label: "Start Chat", icon: MessageSquare, target: "conversation" },
+    ];
+  }, [galleryImages]);
+
   const openLightbox = (index: number) => {
     setLightboxIndex(index);
     setLightboxOpen(true);
+  };
+
+  const scrollToSection = (id: string) => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
   };
 
   if (loading) {
@@ -236,8 +247,21 @@ export default function PersonaDetail() {
     );
   }
 
-  // Display exactly 5 images in grid
+  // Display images in grid
   const fiveImages = galleryImages.slice(0, 5);
+
+  const turnOnList = persona.turnOns
+    ? persona.turnOns.split(",").map((s) => s.trim()).filter(Boolean)
+    : [];
+  const turnOffList = persona.turnOffs
+    ? persona.turnOffs.split(",").map((s) => s.trim()).filter(Boolean)
+    : [];
+  const kinksList = persona.kinksAndFetishes
+    ? persona.kinksAndFetishes.split(",").map((s) => s.trim()).filter(Boolean)
+    : [];
+  const eroticInterestsList = persona.eroticInterests
+    ? persona.eroticInterests.split(",").map((s) => s.trim()).filter(Boolean)
+    : [];
 
   return (
     <div className="flex flex-col min-h-screen bg-[#07080e] text-neutral-100 selection:bg-pink-500/30">
@@ -278,7 +302,7 @@ export default function PersonaDetail() {
       <main className="flex-1 w-full max-w-6xl mx-auto px-4 sm:px-6 pt-3 pb-16">
         {/* COMPACT HERO BANNER & PROFILE IDENTITY ROW */}
         <div className="relative w-full rounded-2xl overflow-hidden border border-white/[0.08] bg-[#0c0e18] mb-6 shadow-xl">
-          {/* BANNER COVER IMAGE - REDUCED HEIGHT */}
+          {/* BANNER COVER IMAGE */}
           <div className="relative h-36 sm:h-44 md:h-48 w-full bg-neutral-900 overflow-hidden">
             {persona.coverImage ? (
               <img
@@ -299,7 +323,7 @@ export default function PersonaDetail() {
           <div className="px-5 pb-5 pt-1 sm:px-6 sm:pb-6 relative z-20 flex flex-col md:flex-row md:items-end justify-between gap-4 -mt-20 sm:-mt-24 md:-mt-28">
             {/* AVATAR & METADATA */}
             <div className="flex flex-col sm:flex-row items-start sm:items-end gap-5">
-              {/* Circular Avatar - Bigger */}
+              {/* Circular Avatar */}
               <div className="relative shrink-0">
                 <div className="p-1.5 rounded-full bg-gradient-to-tr from-[#e1147a] via-[#ec4899] to-[#9333ea] shadow-2xl shadow-black/90">
                   <div className="w-32 h-32 sm:w-38 sm:h-38 md:w-44 md:h-44 rounded-full overflow-hidden border-4 border-[#0c0e18] bg-neutral-800">
@@ -348,22 +372,25 @@ export default function PersonaDetail() {
                   <div className="w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-gradient-to-tr from-pink-500 to-purple-600 flex items-center justify-center shadow-sm">
                     <CheckCircle2 className="w-3 h-3 text-white fill-current" />
                   </div>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide uppercase bg-pink-500/20 text-pink-400 border border-pink-500/30">
+                    18+ Adult VIP
+                  </span>
                 </div>
 
                 {/* Info String with Status */}
                 <div className="flex flex-wrap items-center gap-2 text-xs text-neutral-300 font-medium">
                   <span className="text-neutral-400">@{persona.slug}</span>
                   <span className="text-neutral-600">•</span>
-                  <span>{persona.age || 22}</span>
+                  <span>{persona.age || 22} y/o</span>
                   <span className="text-neutral-600">•</span>
                   <span className="flex items-center gap-1 text-neutral-300">
                     <MapPin className="w-3 h-3 text-neutral-400" />
-                    {[persona.city, persona.country].filter(Boolean).join(", ") || "Lagos, Nigeria"}
+                    {[persona.city, persona.country].filter(Boolean).join(", ") || "United States"}
                   </span>
                   {persona.occupation && (
                     <>
                       <span className="text-neutral-600">•</span>
-                      <span>{persona.occupation}</span>
+                      <span className="text-pink-300">{persona.occupation}</span>
                     </>
                   )}
                   <span className="text-neutral-600">•</span>
@@ -395,7 +422,7 @@ export default function PersonaDetail() {
 
             {/* ACTION BUTTONS (Start Call, Message, Heart) */}
             <div className="flex items-center gap-2.5 shrink-0 pt-1 md:pt-0">
-              {/* Start Call CTA (ONLY trigger call when clicked) */}
+              {/* Start Call CTA */}
               <button
                 onClick={() => navigate(`/call/${persona.slug}`)}
                 className="flex items-center gap-1.5 px-5 py-2.5 rounded-full text-xs font-semibold text-white bg-gradient-to-r from-[#e1147a] via-[#ec4899] to-[#9333ea] hover:opacity-95 shadow-md shadow-pink-500/25 hover:scale-[1.02] active:scale-95 transition-all cursor-pointer"
@@ -429,17 +456,11 @@ export default function PersonaDetail() {
           </div>
         </div>
 
-        {/* 3-COLUMN COMPACT LAYOUT (Images Only, No Videos) */}
+        {/* 3-COLUMN COMPACT LAYOUT */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
           {/* COLUMN 1: LEFT VERTICAL NAVIGATION (lg:col-span-3) */}
           <div className="lg:col-span-3 bg-[#0c0e18] border border-white/[0.08] rounded-xl p-1.5 sticky top-16 shadow-lg space-y-0.5">
-            {[
-              { id: "about", label: "About", icon: User },
-              { id: "personality", label: "Personality", icon: Sun },
-              { id: "interests", label: "Interests", icon: Heart },
-              { id: "photos", label: "Photos", icon: ImageIcon },
-              { id: "conversation", label: "Conversation", icon: MessageSquare }
-            ].map((tab) => {
+            {navTabs.map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
               return (
@@ -449,9 +470,8 @@ export default function PersonaDetail() {
                     setActiveTab(tab.id as any);
                     if (tab.id === "conversation") {
                       navigate(`/call/${persona.slug}?chat=true`);
-                    } else if (tab.id === "photos") {
-                      const el = document.getElementById("photos-section");
-                      if (el) el.scrollIntoView({ behavior: "smooth" });
+                    } else {
+                      scrollToSection(tab.target);
                     }
                   }}
                   className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all text-left cursor-pointer ${
@@ -469,28 +489,36 @@ export default function PersonaDetail() {
 
           {/* COLUMN 2: MIDDLE MAIN CONTENT (lg:col-span-5) */}
           <div className="lg:col-span-5 space-y-4">
-            {/* ABOUT & PROFILE CARD */}
-            <div className="bg-[#0c0e18] border border-white/[0.08] rounded-xl p-4 sm:p-5 shadow-lg space-y-3.5">
+            {/* ABOUT & SULTRY BIO CARD */}
+            <div id="about-section" className="bg-[#0c0e18] border border-white/[0.08] rounded-xl p-4 sm:p-5 shadow-lg space-y-3.5">
               <div className="flex items-center justify-between pb-2.5 border-b border-white/[0.06]">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-300">
-                  Biography & Overview
+                <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-300 flex items-center gap-1.5">
+                  <User className="w-3.5 h-3.5 text-pink-400" />
+                  <span>Biography & Seduction</span>
                 </h3>
-                <span className="text-[11px] text-pink-400 font-medium">Verified Profile</span>
+                <span className="text-[11px] text-pink-400 font-medium">Verified VIP</span>
               </div>
 
-              {/* Bio description text */}
+              {/* Short Bio teaser */}
+              {persona.shortBio && (
+                <div className="p-2.5 rounded-lg bg-gradient-to-r from-pink-950/30 to-purple-950/20 border border-pink-500/20 text-xs italic text-pink-200">
+                  "{persona.shortBio}"
+                </div>
+              )}
+
+              {/* Bio description text / Long bio */}
               <div className="text-xs text-neutral-300 leading-relaxed space-y-2">
                 <p>
-                  {readMore || (persona.description && persona.description.length <= 180)
-                    ? persona.description
-                    : `${persona.description?.slice(0, 180)}...`}
+                  {readMore || ((persona.longBio || persona.description || "").length <= 220)
+                    ? (persona.longBio || persona.description)
+                    : `${(persona.longBio || persona.description || "").slice(0, 220)}...`}
                 </p>
-                {persona.description && persona.description.length > 180 && (
+                {(persona.longBio || persona.description || "").length > 220 && (
                   <button
                     onClick={() => setReadMore(!readMore)}
                     className="text-pink-400 hover:text-pink-300 text-xs font-semibold inline-flex items-center gap-1 pt-1 cursor-pointer"
                   >
-                    <span>{readMore ? "Read Less" : "Read More"}</span>
+                    <span>{readMore ? "Read Less" : "Read Full Story"}</span>
                     {readMore ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
                   </button>
                 )}
@@ -501,22 +529,239 @@ export default function PersonaDetail() {
                 <div className="p-2.5 rounded-lg bg-white/[0.02] border border-white/[0.04]">
                   <span className="text-[10px] uppercase font-bold text-neutral-500 block">Location</span>
                   <span className="text-xs font-semibold text-white">
-                    {[persona.city, persona.country].filter(Boolean).join(", ") || "Lagos, Nigeria"}
+                    {[persona.city, persona.country].filter(Boolean).join(", ") || "United States"}
                   </span>
                 </div>
                 <div className="p-2.5 rounded-lg bg-white/[0.02] border border-white/[0.04]">
                   <span className="text-[10px] uppercase font-bold text-neutral-500 block">Languages</span>
                   <span className="text-xs font-semibold text-white">
-                    {persona.languages || "English, French"}
+                    {persona.languages || "English"}
                   </span>
                 </div>
               </div>
             </div>
 
+            {/* PHYSICAL ATTRIBUTES CARD */}
+            <div id="physical-section" className="bg-[#0c0e18] border border-white/[0.08] rounded-xl p-4 sm:p-5 shadow-lg space-y-3">
+              <div className="flex items-center justify-between pb-2 border-b border-white/[0.06]">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-300 flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-pink-400" />
+                  <span>Physical Attributes</span>
+                </h3>
+                <span className="text-[10px] text-pink-400/80 font-semibold uppercase">Measurements & Look</span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                {persona.bodyType && (
+                  <div className="p-2.5 rounded-lg bg-white/[0.02] border border-white/[0.04]">
+                    <span className="text-[10px] uppercase font-bold text-neutral-400 block flex items-center gap-1">
+                      <Sparkles className="w-2.5 h-2.5 text-pink-400" />
+                      Body Type
+                    </span>
+                    <span className="text-xs font-semibold text-white mt-0.5 block">
+                      {persona.bodyType}
+                    </span>
+                  </div>
+                )}
+
+                {persona.bustSize && (
+                  <div className="p-2.5 rounded-lg bg-pink-950/20 border border-pink-500/20">
+                    <span className="text-[10px] uppercase font-bold text-pink-400 block flex items-center gap-1">
+                      <Heart className="w-2.5 h-2.5 fill-current" />
+                      Bust Size
+                    </span>
+                    <span className="text-xs font-bold text-pink-200 mt-0.5 block">
+                      {persona.bustSize}
+                    </span>
+                  </div>
+                )}
+
+                {persona.height && (
+                  <div className="p-2.5 rounded-lg bg-white/[0.02] border border-white/[0.04]">
+                    <span className="text-[10px] uppercase font-bold text-neutral-400 block flex items-center gap-1">
+                      <Ruler className="w-2.5 h-2.5 text-purple-400" />
+                      Height
+                    </span>
+                    <span className="text-xs font-semibold text-white mt-0.5 block">
+                      {persona.height}
+                    </span>
+                  </div>
+                )}
+
+                {persona.eyeColor && (
+                  <div className="p-2.5 rounded-lg bg-white/[0.02] border border-white/[0.04]">
+                    <span className="text-[10px] uppercase font-bold text-neutral-400 block flex items-center gap-1">
+                      <Eye className="w-2.5 h-2.5 text-blue-400" />
+                      Eyes
+                    </span>
+                    <span className="text-xs font-semibold text-white mt-0.5 block">
+                      {persona.eyeColor}
+                    </span>
+                  </div>
+                )}
+
+                {persona.hairColor && (
+                  <div className="p-2.5 rounded-lg bg-white/[0.02] border border-white/[0.04]">
+                    <span className="text-[10px] uppercase font-bold text-neutral-400 block flex items-center gap-1">
+                      <Feather className="w-2.5 h-2.5 text-amber-400" />
+                      Hair
+                    </span>
+                    <span className="text-xs font-semibold text-white mt-0.5 block">
+                      {persona.hairColor}
+                    </span>
+                  </div>
+                )}
+
+                {persona.tattoosAndPiercings && (
+                  <div className="p-2.5 rounded-lg bg-white/[0.02] border border-white/[0.04] col-span-2">
+                    <span className="text-[10px] uppercase font-bold text-neutral-400 block flex items-center gap-1">
+                      <Sparkles className="w-2.5 h-2.5 text-emerald-400" />
+                      Tattoos & Piercings
+                    </span>
+                    <span className="text-xs font-semibold text-white mt-0.5 block">
+                      {persona.tattoosAndPiercings}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* DESIRES & SPECIALIZED EROTIC INTERESTS CARD */}
+            <div id="intimacy-section" className="bg-[#0c0e18] border border-pink-500/20 rounded-xl p-4 sm:p-5 shadow-lg space-y-3.5 bg-gradient-to-b from-[#0c0e18] via-[#120f1f]/50 to-[#0c0e18]">
+              <div className="flex items-center justify-between pb-2 border-b border-white/[0.06]">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-pink-300 flex items-center gap-1.5">
+                  <Flame className="w-3.5 h-3.5 text-pink-400 fill-pink-500/20" />
+                  <span>Desires & Specialized Erotic Interests</span>
+                </h3>
+                <span className="text-[10px] text-pink-400 font-bold uppercase">Adult Flirty</span>
+              </div>
+
+              {/* Intimacy Style & Preferred Vibe */}
+              {(persona.intimacyStyle || persona.preferredVibe) && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {persona.intimacyStyle && (
+                    <div className="p-2.5 rounded-lg bg-white/[0.03] border border-white/[0.06]">
+                      <span className="text-[10px] uppercase font-bold text-neutral-400 block">Intimacy Style</span>
+                      <span className="text-xs font-semibold text-pink-300 mt-0.5 block">
+                        {persona.intimacyStyle}
+                      </span>
+                    </div>
+                  )}
+                  {persona.preferredVibe && (
+                    <div className="p-2.5 rounded-lg bg-white/[0.03] border border-white/[0.06]">
+                      <span className="text-[10px] uppercase font-bold text-neutral-400 block">Preferred Vibe</span>
+                      <span className="text-xs font-semibold text-purple-300 mt-0.5 block">
+                        {persona.preferredVibe}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Turn-Ons */}
+              {turnOnList.length > 0 && (
+                <div className="space-y-1.5">
+                  <span className="text-[10px] uppercase font-bold text-neutral-400 block flex items-center gap-1">
+                    <Flame className="w-3 h-3 text-pink-500" />
+                    Turn-Ons
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {turnOnList.map((item, idx) => (
+                      <span
+                        key={idx}
+                        className="px-2.5 py-1 rounded-full text-[11px] font-medium bg-pink-500/10 text-pink-200 border border-pink-500/30"
+                      >
+                        {item}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Kinks & Fetishes */}
+              {kinksList.length > 0 && (
+                <div className="space-y-1.5 pt-1 border-t border-white/[0.05]">
+                  <span className="text-[10px] uppercase font-bold text-neutral-400 block flex items-center gap-1">
+                    <Lock className="w-3 h-3 text-purple-400" />
+                    Kinks & Fetishes
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {kinksList.map((item, idx) => (
+                      <span
+                        key={idx}
+                        className="px-2.5 py-1 rounded-full text-[11px] font-medium bg-purple-500/10 text-purple-200 border border-purple-500/30"
+                      >
+                        {item}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Favorite Lingerie */}
+              {persona.favoriteLingerie && (
+                <div className="p-2.5 rounded-lg bg-white/[0.02] border border-white/[0.06] space-y-1">
+                  <span className="text-[10px] uppercase font-bold text-neutral-400 block flex items-center gap-1">
+                    <Shirt className="w-3 h-3 text-pink-400" />
+                    Favorite Lingerie
+                  </span>
+                  <p className="text-xs text-neutral-200 italic leading-relaxed">
+                    {persona.favoriteLingerie}
+                  </p>
+                </div>
+              )}
+
+              {/* Specialized Erotic Interests (Cam, Tease, Shows) */}
+              {eroticInterestsList.length > 0 && (
+                <div className="space-y-1.5 pt-1 border-t border-white/[0.05]">
+                  <span className="text-[10px] uppercase font-bold text-neutral-400 block flex items-center gap-1">
+                    <Sparkles className="w-3 h-3 text-pink-400" />
+                    Specialized Erotic Interests
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {eroticInterestsList.map((item, idx) => (
+                      <span
+                        key={idx}
+                        className="px-2.5 py-1 rounded-full text-[11px] font-medium bg-white/[0.05] text-neutral-200 border border-white/10"
+                      >
+                        {item}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Private Fantasies */}
+              {persona.fantasies && (
+                <div className="p-3 rounded-lg bg-gradient-to-r from-purple-950/40 via-pink-950/20 to-neutral-900 border border-purple-500/30 space-y-1">
+                  <span className="text-[10px] uppercase font-bold text-pink-300 block flex items-center gap-1">
+                    <Sparkles className="w-3 h-3 text-pink-400" />
+                    Forbidden Fantasy
+                  </span>
+                  <p className="text-xs text-neutral-200 italic leading-relaxed">
+                    "{persona.fantasies}"
+                  </p>
+                </div>
+              )}
+
+              {/* Turn-Offs */}
+              {turnOffList.length > 0 && (
+                <div className="space-y-1 pt-1 border-t border-white/[0.05]">
+                  <span className="text-[10px] uppercase font-bold text-neutral-500 block">
+                    Turn-Offs
+                  </span>
+                  <p className="text-[11px] text-neutral-400 leading-relaxed">
+                    {turnOffList.join(" • ")}
+                  </p>
+                </div>
+              )}
+            </div>
+
             {/* PERSONALITY SCORES CARD */}
-            <div className="bg-[#0c0e18] border border-white/[0.08] rounded-xl p-4 sm:p-5 shadow-lg space-y-3">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-300 pb-2 border-b border-white/[0.06]">
-                Personality Breakdown
+            <div id="personality-section" className="bg-[#0c0e18] border border-white/[0.08] rounded-xl p-4 sm:p-5 shadow-lg space-y-3">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-300 pb-2 border-b border-white/[0.06] flex items-center gap-1.5">
+                <Sun className="w-3.5 h-3.5 text-amber-400" />
+                <span>Personality & Allure</span>
               </h3>
               <div className="space-y-2.5">
                 {personalityScores.map((item) => (
@@ -534,9 +779,10 @@ export default function PersonaDetail() {
             </div>
 
             {/* INTERESTS CHIPS CARD */}
-            <div className="bg-[#0c0e18] border border-white/[0.08] rounded-xl p-4 sm:p-5 shadow-lg space-y-3">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-300 pb-2 border-b border-white/[0.06]">
-                Interests & Hobbies
+            <div id="interests-section" className="bg-[#0c0e18] border border-white/[0.08] rounded-xl p-4 sm:p-5 shadow-lg space-y-3">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-300 pb-2 border-b border-white/[0.06] flex items-center gap-1.5">
+                <Heart className="w-3.5 h-3.5 text-pink-400" />
+                <span>Interests & Hobbies</span>
               </h3>
               <div className="flex flex-wrap gap-2">
                 {parsedInterests.map((item) => {
@@ -555,95 +801,128 @@ export default function PersonaDetail() {
             </div>
           </div>
 
-          {/* COLUMN 3: RIGHT PHOTOS SECTION (5 images in grid + View All button) */}
+          {/* COLUMN 3: RIGHT PHOTOS SECTION (Only images visible on profile) */}
           <div className="lg:col-span-4 space-y-4" id="photos-section">
-            <div className="bg-[#0c0e18] border border-white/[0.08] rounded-xl p-4 shadow-lg">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-xs font-bold text-white tracking-tight flex items-center gap-1.5">
-                  <ImageIcon className="w-3.5 h-3.5 text-pink-400" />
-                  <span>Photo Gallery (5 Photos)</span>
-                </h3>
-                <span className="text-[10px] text-neutral-400 font-medium">Verified Photos</span>
-              </div>
-
-              {/* 5-Image Grid Layout: 1 Hero + 4 Mosaic thumbnails */}
-              <div className="space-y-2">
-                {/* Top Row: 1 Tall Portrait on Left + 2 Stacked on Right */}
-                <div className="grid grid-cols-2 gap-2">
-                  {/* Image 1 (Hero Large) */}
-                  <div
-                    onClick={() => openLightbox(0)}
-                    className="relative rounded-lg overflow-hidden bg-neutral-800 aspect-[3/4] cursor-pointer group border border-white/[0.06]"
-                  >
-                    <img
-                      src={fiveImages[0]}
-                      alt="Photo 1"
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    />
-                    <div className="absolute inset-0 bg-black/15 group-hover:bg-transparent transition-colors" />
-                  </div>
-
-                  {/* Images 2 & 3 (Stacked) */}
-                  <div className="flex flex-col gap-2">
-                    <div
-                      onClick={() => openLightbox(1)}
-                      className="relative rounded-lg overflow-hidden bg-neutral-800 aspect-[4/3] cursor-pointer group border border-white/[0.06] flex-1"
-                    >
-                      <img
-                        src={fiveImages[1]}
-                        alt="Photo 2"
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                      />
-                    </div>
-                    <div
-                      onClick={() => openLightbox(2)}
-                      className="relative rounded-lg overflow-hidden bg-neutral-800 aspect-[4/3] cursor-pointer group border border-white/[0.06] flex-1"
-                    >
-                      <img
-                        src={fiveImages[2]}
-                        alt="Photo 3"
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                      />
-                    </div>
-                  </div>
+            {galleryImages.length > 0 ? (
+              <div className="bg-[#0c0e18] border border-white/[0.08] rounded-xl p-4 shadow-lg">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-xs font-bold text-white tracking-tight flex items-center gap-1.5">
+                    <ImageIcon className="w-3.5 h-3.5 text-pink-400" />
+                    <span>Photo Gallery ({galleryImages.length} Photos)</span>
+                  </h3>
+                  <span className="text-[10px] text-neutral-400 font-medium">Verified Photos</span>
                 </div>
 
-                {/* Bottom Row: Images 4 & 5 (2 Side-by-Side) */}
-                <div className="grid grid-cols-2 gap-2">
-                  <div
-                    onClick={() => openLightbox(3)}
-                    className="relative rounded-lg overflow-hidden bg-neutral-800 aspect-[4/3] cursor-pointer group border border-white/[0.06]"
-                  >
-                    <img
-                      src={fiveImages[3]}
-                      alt="Photo 4"
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    />
-                  </div>
-                  <div
-                    onClick={() => openLightbox(4)}
-                    className="relative rounded-lg overflow-hidden bg-neutral-800 aspect-[4/3] cursor-pointer group border border-white/[0.06]"
-                  >
-                    <img
-                      src={fiveImages[4]}
-                      alt="Photo 5"
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    />
-                  </div>
-                </div>
-              </div>
+                {/* 5-Image Grid Layout */}
+                <div className="space-y-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div
+                      onClick={() => openLightbox(0)}
+                      className="relative rounded-lg overflow-hidden bg-neutral-800 aspect-[3/4] cursor-pointer group border border-white/[0.06]"
+                    >
+                      <img
+                        src={fiveImages[0]}
+                        alt="Photo 1"
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      />
+                      <div className="absolute inset-0 bg-black/15 group-hover:bg-transparent transition-colors" />
+                    </div>
 
-              {/* View All Button linking to https://fanve.pages.dev */}
-              <a
-                href="https://fanve.pages.dev"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full mt-3.5 py-2.5 px-4 rounded-xl text-xs font-semibold text-white bg-gradient-to-r from-[#e1147a] via-[#ec4899] to-[#9333ea] hover:opacity-95 shadow-md shadow-pink-500/20 flex items-center justify-center gap-2 transition-all hover:scale-[1.01] active:scale-95 text-center cursor-pointer"
-              >
-                <span>View All</span>
-                <ExternalLink className="w-3.5 h-3.5 text-white shrink-0" />
-              </a>
-            </div>
+                    <div className="flex flex-col gap-2">
+                      {fiveImages[1] && (
+                        <div
+                          onClick={() => openLightbox(1)}
+                          className="relative rounded-lg overflow-hidden bg-neutral-800 aspect-[4/3] cursor-pointer group border border-white/[0.06] flex-1"
+                        >
+                          <img
+                            src={fiveImages[1]}
+                            alt="Photo 2"
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          />
+                        </div>
+                      )}
+                      {fiveImages[2] && (
+                        <div
+                          onClick={() => openLightbox(2)}
+                          className="relative rounded-lg overflow-hidden bg-neutral-800 aspect-[4/3] cursor-pointer group border border-white/[0.06] flex-1"
+                        >
+                          <img
+                            src={fiveImages[2]}
+                            alt="Photo 3"
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {(fiveImages[3] || fiveImages[4]) && (
+                    <div className="grid grid-cols-2 gap-2">
+                      {fiveImages[3] && (
+                        <div
+                          onClick={() => openLightbox(3)}
+                          className="relative rounded-lg overflow-hidden bg-neutral-800 aspect-[4/3] cursor-pointer group border border-white/[0.06]"
+                        >
+                          <img
+                            src={fiveImages[3]}
+                            alt="Photo 4"
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          />
+                        </div>
+                      )}
+                      {fiveImages[4] && (
+                        <div
+                          onClick={() => openLightbox(4)}
+                          className="relative rounded-lg overflow-hidden bg-neutral-800 aspect-[4/3] cursor-pointer group border border-white/[0.06]"
+                        >
+                          <img
+                            src={fiveImages[4]}
+                            alt="Photo 5"
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <a
+                  href="https://fanve.pages.dev"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full mt-3.5 py-2.5 px-4 rounded-xl text-xs font-semibold text-white bg-gradient-to-r from-[#e1147a] via-[#ec4899] to-[#9333ea] hover:opacity-95 shadow-md shadow-pink-500/20 flex items-center justify-center gap-2 transition-all hover:scale-[1.01] active:scale-95 text-center cursor-pointer"
+                >
+                  <span>View All</span>
+                  <ExternalLink className="w-3.5 h-3.5 text-white shrink-0" />
+                </a>
+              </div>
+            ) : (
+              <div className="bg-[#0c0e18] border border-white/[0.08] rounded-xl p-5 shadow-lg text-center">
+                <div className="flex items-center justify-between mb-4 pb-2 border-b border-white/[0.06]">
+                  <h3 className="text-xs font-bold text-white tracking-tight flex items-center gap-1.5">
+                    <ImageIcon className="w-3.5 h-3.5 text-pink-400" />
+                    <span>Photos</span>
+                  </h3>
+                  <span className="text-[10px] text-neutral-500 font-medium">Gallery</span>
+                </div>
+                <div className="py-8 flex flex-col items-center justify-center text-center">
+                  <div className="w-12 h-12 rounded-full bg-white/[0.04] border border-white/[0.08] flex items-center justify-center mb-3 text-neutral-500">
+                    <ImageIcon className="w-5 h-5 text-neutral-400" />
+                  </div>
+                  <p className="text-xs font-semibold text-neutral-300 mb-1">No photos uploaded yet</p>
+                  <p className="text-[11px] text-neutral-500 max-w-[200px]">Profile photos will be displayed here once provided.</p>
+                </div>
+                <a
+                  href="https://fanve.pages.dev"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full mt-2 py-2.5 px-4 rounded-xl text-xs font-semibold text-white bg-gradient-to-r from-[#e1147a] via-[#ec4899] to-[#9333ea] hover:opacity-95 shadow-md shadow-pink-500/20 flex items-center justify-center gap-2 transition-all hover:scale-[1.01] active:scale-95 text-center cursor-pointer"
+                >
+                  <span>View All</span>
+                  <ExternalLink className="w-3.5 h-3.5 text-white shrink-0" />
+                </a>
+              </div>
+            )}
           </div>
         </div>
       </main>
@@ -710,3 +989,4 @@ export default function PersonaDetail() {
     </div>
   );
 }
+

@@ -147,12 +147,18 @@ export default function LandingPage() {
                 >
                   {/* Bigger Image Portrait */}
                   <div className="relative aspect-[3/4.2] sm:h-80 w-full overflow-hidden bg-neutral-900">
-                    <img
-                      src={p.profileImage || ""}
-                      alt={p.name}
-                      className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-500"
-                      loading="lazy"
-                    />
+                    {p.profileImage ? (
+                      <img
+                        src={p.profileImage}
+                        alt={p.name}
+                        className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-500"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-4xl text-neutral-600 font-bold tracking-tighter">
+                        {p.name.charAt(0)}
+                      </div>
+                    )}
                     <div className="absolute inset-0 bg-gradient-to-t from-[#0d0f1a] via-transparent to-transparent" />
 
                     {/* Online Status Badge with 🟢 dot */}

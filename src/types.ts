@@ -12,9 +12,30 @@ export interface Persona {
   city: string | null;
   country: string | null;
   occupation: string | null;
+  languages?: string | null;
   
   shortBio: string | null;
   longBio: string | null;
+
+  // Physical Attributes
+  bodyType?: string | null;
+  bustSize?: string | null;
+  height?: string | null;
+  eyeColor?: string | null;
+  hairColor?: string | null;
+  tattoosAndPiercings?: string | null;
+
+  // Suggestive Bio Fields
+  turnOns?: string | null;
+  turnOffs?: string | null;
+  fantasies?: string | null;
+  intimacyStyle?: string | null;
+  preferredVibe?: string | null;
+
+  // Specialized Erotic Interests
+  kinksAndFetishes?: string | null;
+  favoriteLingerie?: string | null;
+  eroticInterests?: string | null;
 
   personality: string;
   background: string;
@@ -39,6 +60,7 @@ export interface PersonaVideo {
   id: string;
   personaId: string;
   url: string;
+  streamUrl?: string | null;
   title: string;
   active: boolean;
   createdAt: string;

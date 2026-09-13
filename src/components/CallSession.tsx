@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef, FormEvent, ChangeEvent } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
+import Hls from "hls.js";
 import { Persona, ChatMessage, CallState, CALL_CONFIG, PersonaVideo } from "../types";
 import { DEFAULT_PERSONAS } from "../data/defaultPersonas";
 import { motion, AnimatePresence } from "framer-motion";
@@ -240,7 +241,11 @@ export default function CallSession() {
   // Video state
   const [videos, setVideos] = useState<PersonaVideo[]>([]);
   const [currentVideo, setCurrentVideo] = useState<PersonaVideo | null>(null);
+  const [isRemoteVideoPlaying, setIsRemoteVideoPlaying] = useState(false);
+  const currentVideoRef = useRef<PersonaVideo | null>(null);
+  const initialPersonaVideosRef = useRef<PersonaVideo[]>([]);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const hlsRef = useRef<Hls | null>(null);
   const [muted, setMuted] = useState(false); // Mic mute
   const [audioEnabled, setAudioEnabled] = useState(true); // Remote audio sound
 
@@ -261,10 +266,16 @@ export default function CallSession() {
     return () => clearTimeout(timer);
   }, [cameraNotice]);
 
-  // Clean up media stream and videos ONLY on genuine component unmount
+  // Clean up media stream, Hls instance, and videos ONLY on genuine component unmount
   useEffect(() => {
     return () => {
       callStateRef.current = "ENDED";
+      if (hlsRef.current) {
+        try {
+          hlsRef.current.destroy();
+          hlsRef.current = null;
+        } catch (e) {}
+      }
       if (videoRef.current) {
         try {
           videoRef.current.pause();
@@ -473,11 +484,11 @@ export default function CallSession() {
         return res.json();
       })
       .catch((err) => {
-        console.warn("CallSession: using fallback persona data:", err);
+        console.warn("CallSession: persona fetch error, checking local personas:", err);
         const fallback =
           DEFAULT_PERSONAS.find(
             (p) => p.slug.toLowerCase() === slug?.toLowerCase()
-          ) || DEFAULT_PERSONAS[0];
+          ) || null;
         return fallback;
       })
       .then((data) => {
@@ -503,27 +514,136 @@ export default function CallSession() {
     return () => clearInterval(interval);
   }, [callState]);
 
-  // Programmatic video playback trigger on currentVideo update with sound fallback
+  // Programmatic direct stream playback with HLS support for clean, natural video without player UI
   useEffect(() => {
-    if (!currentVideo || !videoRef.current) return;
+    if (!currentVideo) return;
     if (callStateRef.current === "ENDED" || callStateRef.current === "ENDING") return;
 
-    const vid = videoRef.current;
-    const playPromise = vid.play();
-    if (playPromise !== undefined) {
-      playPromise
-        .then(() => {
-          handleVideoPlaying();
-        })
-        .catch((err) => {
-          console.warn("Autoplay with sound prevented, switching to muted autoplay:", err);
-          vid.muted = true;
-          setAudioEnabled(false);
-          vid.play().catch((playErr) => {
-            console.error("Muted playback failed:", playErr);
-          });
+    currentVideoRef.current = currentVideo;
+    let isMounted = true;
+
+    const setupAndPlay = async () => {
+      if (!currentVideo || !currentVideo.url) return;
+      let playUrl = currentVideo.streamUrl || currentVideo.url;
+
+      // If it's an embed URL and doesn't have a direct/proxied streamUrl yet, resolve via API
+      if (
+        !currentVideo.streamUrl &&
+        (playUrl.includes("rubyvidhub") || playUrl.includes("embed") || playUrl.includes(".html"))
+      ) {
+        try {
+          const res = await fetch(`/api/resolve-video-stream?url=${encodeURIComponent(playUrl)}`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.streamUrl) {
+              playUrl = data.streamUrl;
+            }
+          }
+        } catch (e) {
+          console.warn("Error resolving video stream:", e);
+        }
+      }
+
+      if (
+        playUrl &&
+        !playUrl.startsWith("/api/hls-proxy") &&
+        (playUrl.includes("rubyvidhub") || (playUrl.includes("embed") && playUrl.includes(".html")))
+      ) {
+        playUrl = `/api/hls-proxy?embedUrl=${encodeURIComponent(playUrl)}`;
+      }
+
+      if (!isMounted || !videoRef.current) return;
+      const vid = videoRef.current;
+
+      const attemptPlay = () => {
+        if (!isMounted || callStateRef.current === "ENDED") return;
+        const playPromise = vid.play();
+        if (playPromise !== undefined) {
+          playPromise
+            .then(() => {
+              if (isMounted) handleVideoPlaying();
+            })
+            .catch((err) => {
+              console.warn("Autoplay with sound prevented, switching to muted autoplay:", err);
+              vid.muted = true;
+              setAudioEnabled(false);
+              vid.play().then(() => {
+                if (isMounted) handleVideoPlaying();
+              }).catch((playErr) => {
+                console.error("Muted playback failed:", playErr);
+                if (isMounted) handleVideoError();
+              });
+            });
+        }
+      };
+
+      const isHlsStream = playUrl.includes(".m3u8") || playUrl.includes("hls-proxy");
+
+      if (!playUrl || (playUrl.includes(".html") && !playUrl.includes("hls-proxy"))) {
+        console.warn("Unresolved HTML embed URL or empty URL cannot be played directly, switching video.");
+        handleVideoError();
+        return;
+      }
+
+      if (isHlsStream && Hls.isSupported()) {
+        if (hlsRef.current) {
+          hlsRef.current.destroy();
+          hlsRef.current = null;
+        }
+
+        const hls = new Hls({
+          enableWorker: true,
+          lowLatencyMode: true,
+          backBufferLength: 60,
+          maxBufferLength: 30,
         });
-    }
+        hlsRef.current = hls;
+
+        hls.loadSource(playUrl);
+        hls.attachMedia(vid);
+
+        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          if (isMounted) attemptPlay();
+        });
+
+        hls.on(Hls.Events.ERROR, (_event, data) => {
+          if (!isMounted || callStateRef.current === "ENDED") return;
+          if (data.fatal) {
+            switch (data.type) {
+              case Hls.ErrorTypes.MEDIA_ERROR:
+                hls.recoverMediaError();
+                break;
+              case Hls.ErrorTypes.NETWORK_ERROR:
+              default:
+                hls.destroy();
+                hlsRef.current = null;
+                handleVideoError();
+                break;
+            }
+          }
+        });
+      } else if (isHlsStream && vid.canPlayType("application/vnd.apple.mpegurl")) {
+        if (hlsRef.current) {
+          hlsRef.current.destroy();
+          hlsRef.current = null;
+        }
+        vid.src = playUrl;
+        attemptPlay();
+      } else {
+        if (hlsRef.current) {
+          hlsRef.current.destroy();
+          hlsRef.current = null;
+        }
+        vid.src = playUrl;
+        attemptPlay();
+      }
+    };
+
+    setupAndPlay();
+
+    return () => {
+      isMounted = false;
+    };
   }, [currentVideo]);
 
   // Auto-scroll chat
@@ -580,52 +700,71 @@ export default function CallSession() {
       setIsCameraStarting(false);
     }
 
-    const defaultVid1 = `/videos/${targetPersona?.slug || slug || "maya"}_1.mp4`;
-    const defaultVid2 = `/videos/${targetPersona?.slug || slug || "maya"}_2.mp4`;
-    const vids =
+    // Strictly isolate videos to the active persona only
+    const validVideos =
       targetPersona?.videos && targetPersona.videos.length > 0
-        ? targetPersona.videos
-        : [
-            {
-              id: "fallback-video-1",
-              url: defaultVid1,
-              title: "Video Stream 1",
-              active: true,
-            },
-            {
-              id: "fallback-video-2",
-              url: defaultVid2,
-              title: "Video Stream 2",
-              active: true,
-            },
-          ];
-    setVideos(vids);
+        ? targetPersona.videos.filter((v) => v && v.url && v.url.trim().length > 0)
+        : [];
 
-    const connectDelay = isAnsweringIncoming ? 400 : 3000;
-    setTimeout(() => {
-      if (callStateRef.current === "ENDED" || callStateRef.current === "ENDING") return;
-      pickNextVideo(vids, null);
-      setCallState("VIDEO_LOADING");
-    }, connectDelay);
+    initialPersonaVideosRef.current = validVideos;
+    setVideos(validVideos);
+
+    // Initial state: Start loading the stream in the background while phone is ringing.
+    // Call will officially connect and switch view only when video frames start rendering!
+    setIsRemoteVideoPlaying(false);
+    hasPickedUp.current = false;
+    hasAutoSwitched.current = false;
+    setActiveFullView("local");
+
+    if (validVideos.length > 0) {
+      pickNextVideo(validVideos, null);
+    } else {
+      setCurrentVideo(null);
+      currentVideoRef.current = null;
+    }
   };
 
   const pickNextVideo = (availableVideos: PersonaVideo[], previousId: string | null) => {
     if (callStateRef.current === "ENDED" || callStateRef.current === "ENDING") return;
-    if (!availableVideos || availableVideos.length === 0) return;
 
-    let candidates = availableVideos;
-    if (availableVideos.length > 1 && previousId) {
-      candidates = availableVideos.filter((v) => v.id !== previousId);
+    let candidates = (availableVideos || []).filter((v) => v && v.url && v.url.trim().length > 0);
+    
+    // If available subset is empty, reset back to this specific persona's own video pool
+    if (candidates.length === 0) {
+      candidates = (initialPersonaVideosRef.current || []).filter(
+        (v) => v && v.url && v.url.trim().length > 0
+      );
+    }
+
+    // If this persona has no videos at all, do NOT substitute other personas' videos
+    if (candidates.length === 0) {
+      setCurrentVideo(null);
+      currentVideoRef.current = null;
+      return;
+    }
+
+    if (candidates.length > 1 && previousId) {
+      const filtered = candidates.filter((v) => v.id !== previousId);
+      if (filtered.length > 0) {
+        candidates = filtered;
+      }
     }
 
     const randomVideo = candidates[Math.floor(Math.random() * candidates.length)];
+    if (!randomVideo) return;
+    currentVideoRef.current = randomVideo;
     setCurrentVideo({ ...randomVideo });
 
-    // Safety timeout in case video fails to load
+    // Safety timeout in case video stalls completely
     if (videoSafetyTimeoutRef.current) clearTimeout(videoSafetyTimeoutRef.current);
     videoSafetyTimeoutRef.current = setTimeout(() => {
       if (callStateRef.current === "ENDED" || callStateRef.current === "ENDING") return;
-      if (videoRef.current && videoRef.current.readyState === 0) {
+      if (
+        callStateRef.current === "CONNECTING" ||
+        callStateRef.current === "VIDEO_LOADING" ||
+        callStateRef.current === "VIDEO_BUFFERING"
+      ) {
+        console.warn("Video stream taking too long to start, auto-cycling within persona's videos");
         handleVideoError();
       }
     }, 8000);
@@ -642,6 +781,10 @@ export default function CallSession() {
       }
       return;
     }
+
+    setIsRemoteVideoPlaying(true);
+
+    // ONLY pick up the call when the remote video stream actually starts playing its frames
     if (!hasPickedUp.current) {
       hasPickedUp.current = true;
       stopRinging();
@@ -657,6 +800,7 @@ export default function CallSession() {
 
   const handleVideoEnded = () => {
     if (callStateRef.current === "ENDED" || callStateRef.current === "ENDING") return;
+    setIsRemoteVideoPlaying(false);
     setCallState("WAITING_FOR_NEXT_CLIP");
 
     const delay =
@@ -674,39 +818,66 @@ export default function CallSession() {
   };
 
   const handleVideoError = () => {
-    console.error("Video failed to load:", currentVideo?.url);
+    if (callStateRef.current === "ENDED" || callStateRef.current === "ENDING") return;
+    setIsRemoteVideoPlaying(false);
+    const activeVid = currentVideoRef.current || currentVideo;
+    if (!activeVid) return;
 
-    if (currentVideo) {
-      const remainingVideos = videos.filter((v) => v.id !== currentVideo.id);
+    console.warn("Video failed to play, switching to next clip for active persona:", activeVid.url || "unknown");
+
+    const remainingVideos = videos.filter(
+      (v) => v.id !== activeVid.id && v.url && v.url.trim().length > 0
+    );
+
+    if (remainingVideos.length > 0) {
       setVideos(remainingVideos);
-
-      if (remainingVideos.length > 0) {
-        setCallState("WAITING_FOR_NEXT_CLIP");
-        if (nextVideoTimeoutRef.current) clearTimeout(nextVideoTimeoutRef.current);
-        nextVideoTimeoutRef.current = setTimeout(() => {
-          if (callStateRef.current === "ENDED" || callStateRef.current === "ENDING") return;
-          pickNextVideo(remainingVideos, null);
-          setCallState("VIDEO_LOADING");
-        }, 1500);
-        return;
-      }
+      setCallState("WAITING_FOR_NEXT_CLIP");
+      if (nextVideoTimeoutRef.current) clearTimeout(nextVideoTimeoutRef.current);
+      nextVideoTimeoutRef.current = setTimeout(() => {
+        if (callStateRef.current === "ENDED" || callStateRef.current === "ENDING") return;
+        pickNextVideo(remainingVideos, null);
+        setCallState("VIDEO_LOADING");
+      }, 1000);
+      return;
     }
 
-    if (!hasPickedUp.current) {
-      stopRinging();
-      playHangup();
+    // If all clips in current cycle have been tried, reset to this persona's original video list
+    const personaVideos = (initialPersonaVideosRef.current || []).filter(
+      (v) => v && v.url && v.url.trim().length > 0
+    );
+
+    if (personaVideos.length > 0) {
+      setVideos(personaVideos);
+      setCallState("WAITING_FOR_NEXT_CLIP");
+      if (nextVideoTimeoutRef.current) clearTimeout(nextVideoTimeoutRef.current);
+      nextVideoTimeoutRef.current = setTimeout(() => {
+        if (callStateRef.current === "ENDED" || callStateRef.current === "ENDING") return;
+        pickNextVideo(personaVideos, null);
+        setCallState("VIDEO_LOADING");
+      }, 1000);
+    } else {
+      setVideos([]);
+      setCurrentVideo(null);
+      currentVideoRef.current = null;
     }
-    setCallState("VIDEO_ERROR");
   };
 
   const endCall = () => {
     callStateRef.current = "ENDED";
     setCallState("ENDED");
+    setIsRemoteVideoPlaying(false);
+    hasPickedUp.current = false;
     hasAutoSwitched.current = false;
     setActiveFullView("local");
     setIsCameraStarting(false);
 
-    // 1. Force stop, rewind, and unload video element completely
+    // 1. Force stop, rewind, and unload video element and destroy Hls instance
+    if (hlsRef.current) {
+      try {
+        hlsRef.current.destroy();
+        hlsRef.current = null;
+      } catch (e) {}
+    }
     if (videoRef.current) {
       try {
         videoRef.current.pause();
@@ -1535,44 +1706,31 @@ export default function CallSession() {
                 {currentVideo && (
                   <video
                     ref={videoRef}
-                    key={currentVideo.id + currentVideo.url}
-                    src={currentVideo.url}
+                    key={currentVideo.id}
                     preload="auto"
                     className={`w-full h-full object-cover transition-opacity duration-700 ${
-                      callState === "VIDEO_PLAYING" ? "opacity-100" : "opacity-0"
+                      isRemoteVideoPlaying ? "opacity-100" : "opacity-0"
                     }`}
                     autoPlay
                     playsInline
                     muted={!audioEnabled}
                     onPlay={handleVideoPlaying}
                     onPlaying={handleVideoPlaying}
-                    onLoadedData={() => {
-                      if (videoRef.current && videoRef.current.paused) {
-                        videoRef.current.play().then(() => handleVideoPlaying()).catch(() => {});
-                      } else {
-                        handleVideoPlaying();
-                      }
-                    }}
-                    onCanPlay={() => {
-                      if (videoRef.current && videoRef.current.paused) {
-                        videoRef.current.play().then(() => handleVideoPlaying()).catch(() => {});
-                      } else {
-                        handleVideoPlaying();
-                      }
-                    }}
                     onEnded={handleVideoEnded}
                     onError={handleVideoError}
                     onWaiting={() => setCallState("VIDEO_BUFFERING")}
+                    draggable={false}
+                    onContextMenu={(e) => e.preventDefault()}
                   />
                 )}
 
-                {callState !== "VIDEO_PLAYING" && (
-                  <div className="absolute inset-0 bg-gradient-to-br from-neutral-900 via-neutral-950 to-black flex flex-col items-center justify-center p-3 text-center">
-                    <div className="relative mb-3">
+                {(!isRemoteVideoPlaying || callState === "CONNECTING") && (
+                  <div className="absolute inset-0 bg-gradient-to-br from-neutral-900 via-neutral-950 to-black flex flex-col items-center justify-center p-4 text-center pointer-events-none z-20">
+                    <div className="relative mb-3.5">
                       <div
                         className={`${
                           isRemoteFull ? "w-28 h-28 md:w-36 md:h-36" : "w-14 h-14 sm:w-16 sm:h-16"
-                        } rounded-full overflow-hidden border-2 border-purple-500/40 shadow-xl bg-neutral-800`}
+                        } rounded-full overflow-hidden border-2 border-purple-500/40 shadow-xl bg-neutral-800 relative z-10`}
                       >
                         {persona?.profileImage ? (
                           <img
@@ -1581,17 +1739,18 @@ export default function CallSession() {
                             className="w-full h-full object-cover"
                           />
                         ) : (
-                          <div className="w-full h-full flex items-center justify-center text-white font-bold">
+                          <div className="w-full h-full flex items-center justify-center text-white font-bold text-xl">
                             {persona?.name?.charAt(0) || "P"}
                           </div>
                         )}
                       </div>
-                      <div className="absolute inset-0 rounded-full border-2 border-purple-500 animate-ping opacity-30 pointer-events-none"></div>
+                      <div className="absolute inset-0 rounded-full border-2 border-purple-500 animate-ping opacity-35 pointer-events-none"></div>
+                      <div className="absolute -inset-2 rounded-full border border-pink-500/25 animate-pulse pointer-events-none"></div>
                     </div>
 
                     <span
                       className={`font-semibold text-white tracking-tight ${
-                        isRemoteFull ? "text-xl mb-1" : "text-xs"
+                        isRemoteFull ? "text-xl mb-1.5" : "text-xs mb-0.5"
                       }`}
                     >
                       {persona?.name || "Persona"}
@@ -1602,20 +1761,26 @@ export default function CallSession() {
                         isRemoteFull ? "text-sm mt-1" : "text-[10px] mt-0.5"
                       }`}
                     >
-                      <Loader2 className="w-3 h-3 animate-spin" />
-                      Calling...
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-purple-400" />
+                      {callState === "CONNECTING" ? "Calling..." : "Buffering video stream..."}
                     </span>
+
+                    {isRemoteFull && callState === "CONNECTING" && (
+                      <p className="text-[11px] text-neutral-400 mt-2 max-w-xs">
+                        Connecting live camera feed...
+                      </p>
+                    )}
                   </div>
                 )}
 
-                {callState === "VIDEO_BUFFERING" && (
-                  <div className="absolute inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center">
+                {callState === "VIDEO_BUFFERING" && isRemoteVideoPlaying && (
+                  <div className="absolute inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center z-20">
                     <Loader2 className="w-7 h-7 text-white animate-spin" />
                   </div>
                 )}
 
                 {!isRemoteFull && (
-                  <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                  <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center z-30">
                     <div className="p-2 rounded-full bg-black/60 backdrop-blur-md text-white border border-white/20">
                       <ArrowLeftRight className="w-4 h-4 text-purple-300" />
                     </div>
@@ -1978,13 +2143,13 @@ export default function CallSession() {
                         {m.attachmentType === "video" ? (
                           <video
                             src={m.attachmentUrl}
-                            controls
-                            controlsList="nodownload noplaybackrate nofullscreen"
-                            disablePictureInPicture
-                            disableRemotePlayback
+                            autoPlay
+                            playsInline
+                            muted
+                            loop
                             draggable={false}
                             onContextMenu={(e) => e.preventDefault()}
-                            className="max-h-52 max-w-full rounded-xl"
+                            className="max-h-52 max-w-full rounded-xl object-cover"
                           />
                         ) : (
                           <div

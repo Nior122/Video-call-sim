@@ -110,12 +110,18 @@ export default function OnlinePopupToast() {
               {/* Bigger Avatar with pulsing green online dot */}
               <div className="relative shrink-0">
                 <div className="p-[2px] rounded-full bg-gradient-to-tr from-[#e1147a] via-[#ec4899] to-[#9333ea] shadow-md shadow-pink-500/30">
-                  <div className="w-13 h-13 sm:w-14 sm:h-14 rounded-full overflow-hidden bg-neutral-800 border-2 border-[#0f111e]">
-                    <img
-                      src={activePersona.profileImage || ""}
-                      alt={activePersona.name}
-                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
-                    />
+                  <div className="w-13 h-13 sm:w-14 sm:h-14 rounded-full overflow-hidden bg-neutral-800 border-2 border-[#0f111e] flex items-center justify-center">
+                    {activePersona.profileImage ? (
+                      <img
+                        src={activePersona.profileImage}
+                        alt={activePersona.name}
+                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                      />
+                    ) : (
+                      <span className="text-white font-bold text-lg">
+                        {activePersona.name.charAt(0)}
+                      </span>
+                    )}
                   </div>
                 </div>
                 {/* 🟢 Online indicator badge */}

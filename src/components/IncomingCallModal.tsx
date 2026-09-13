@@ -90,13 +90,19 @@ export const IncomingCallModal: React.FC<IncomingCallModalProps> = ({
 
           {/* Profile image container */}
           <div className="relative w-32 h-32 sm:w-40 sm:h-40 rounded-full p-1.5 bg-gradient-to-tr from-pink-500 via-purple-500 to-emerald-400 shadow-2xl shadow-pink-500/30">
-            <img
-              src={persona.profileImage || persona.coverImage}
-              alt={persona.name}
-              draggable={false}
-              onContextMenu={(e) => e.preventDefault()}
-              className="w-full h-full object-cover rounded-full select-none"
-            />
+            {persona.profileImage || persona.coverImage ? (
+              <img
+                src={persona.profileImage || persona.coverImage}
+                alt={persona.name}
+                draggable={false}
+                onContextMenu={(e) => e.preventDefault()}
+                className="w-full h-full object-cover rounded-full select-none"
+              />
+            ) : (
+              <div className="w-full h-full rounded-full flex items-center justify-center bg-neutral-800 text-white font-bold text-4xl">
+                {persona.name.charAt(0)}
+              </div>
+            )}
           </div>
         </div>
 
