@@ -42,7 +42,7 @@ dotenv.config();
 
 const prisma = new PrismaClient();
 const app = express();
-const PORT = 3000;
+const PORT = 5000;
 
 // In-memory cache/fallback in case database is initializing or unavailable
 let inMemoryPersonas = [...DEFAULT_PERSONAS];
@@ -776,7 +776,7 @@ async function seedDatabase() {
     return;
   }
   try {
-    console.log("Synchronizing personas: keeping only pinkchyu and bigtittygothegg, clearing all media...");
+    console.log("Synchronizing personas: keeping only pinkchyu and bigtittygothegg...");
 
     // Quick test query with timeout
     await Promise.race([
@@ -796,7 +796,7 @@ async function seedDatabase() {
       }
     });
 
-    // 3. Update/upsert the remaining profiles with fresh bio fields and empty media
+    // 3. Update/upsert the remaining profiles with fresh bio and media fields
     for (const p of DEFAULT_PERSONAS) {
       const existing = await prisma.persona.findUnique({
         where: { slug: p.slug }
@@ -808,9 +808,9 @@ async function seedDatabase() {
           data: {
             name: p.name,
             description: p.description,
-            profileImage: null,
-            coverImage: null,
-            gallery: "",
+            profileImage: p.profileImage || null,
+            coverImage: p.coverImage || null,
+            gallery: p.gallery || "",
             shortBio: p.shortBio,
             longBio: p.longBio,
             personality: p.personality,
@@ -852,9 +852,9 @@ async function seedDatabase() {
             name: p.name,
             slug: p.slug,
             description: p.description,
-            profileImage: null,
-            coverImage: null,
-            gallery: "",
+            profileImage: p.profileImage || null,
+            coverImage: p.coverImage || null,
+            gallery: p.gallery || "",
             age: p.age,
             city: p.city,
             country: p.country,
@@ -921,7 +921,7 @@ async function seedDatabase() {
     }
 
     await syncSitemapFile();
-    console.log("Database personas wiped and synced successfully. Remaining profiles: pinkchyu, bigtittygothegg (no media).");
+    console.log("Database personas synced successfully. Remaining profiles: pinkchyu, bigtittygothegg.");
   } catch (err) {
     console.warn("Database initialization notice (using in-memory fallback):", err);
   }
