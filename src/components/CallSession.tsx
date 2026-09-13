@@ -481,7 +481,10 @@ export default function CallSession() {
 
     fetch(`/api/personas/${slug}`)
       .then((res) => {
-        if (!res.ok) throw new Error("Not found");
+        const contentType = res.headers.get("content-type");
+        if (!res.ok || !contentType || !contentType.includes("application/json")) {
+          throw new Error("Not JSON endpoint");
+        }
         return res.json();
       })
       .catch((err) => {

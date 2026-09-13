@@ -24,7 +24,10 @@ export default function ExplorePersonas() {
   useEffect(() => {
     fetch("/api/personas")
       .then((res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const contentType = res.headers.get("content-type");
+        if (!res.ok || !contentType || !contentType.includes("application/json")) {
+          throw new Error(`HTTP ${res.status} non-JSON response`);
+        }
         return res.json();
       })
       .then((data) => {

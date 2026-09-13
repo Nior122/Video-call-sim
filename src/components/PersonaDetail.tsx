@@ -78,15 +78,22 @@ export default function PersonaDetail() {
   useEffect(() => {
     fetch(`/api/personas/${slug}`)
       .then((res) => {
-        if (!res.ok) throw new Error("Not found");
+        const contentType = res.headers.get("content-type");
+        if (!res.ok || !contentType || !contentType.includes("application/json")) {
+          throw new Error("Not a JSON API endpoint");
+        }
         return res.json();
       })
       .then((data) => {
-        setPersona(data);
+        if (data && data.name) {
+          setPersona(data);
+        } else {
+          throw new Error("Invalid persona data structure");
+        }
         setLoading(false);
       })
       .catch((err) => {
-        console.warn("Error loading persona from API, checking fallback:", err);
+        console.warn("Error loading persona from API, using static default fallback:", err);
         const fallback = DEFAULT_PERSONAS.find(
           (p) => p.slug.toLowerCase() === slug?.toLowerCase()
         );
@@ -954,6 +961,7 @@ export default function PersonaDetail() {
                           height={360}
                           allow="autoplay; fullscreen; picture-in-picture; encrypted-media; accelerometer; gyroscope; clipboard-write; web-share"
                           allowFullScreen
+                          referrerPolicy="no-referrer"
                           style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", border: 0 }}
                         />
                       </div>

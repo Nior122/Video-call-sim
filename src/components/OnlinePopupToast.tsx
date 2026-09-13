@@ -18,7 +18,10 @@ export default function OnlinePopupToast() {
   useEffect(() => {
     fetch("/api/personas")
       .then((res) => {
-        if (!res.ok) throw new Error("Failed");
+        const contentType = res.headers.get("content-type");
+        if (!res.ok || !contentType || !contentType.includes("application/json")) {
+          throw new Error("Failed");
+        }
         return res.json();
       })
       .then((data) => {
