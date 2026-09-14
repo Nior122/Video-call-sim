@@ -932,44 +932,7 @@ export default function PersonaDetail() {
               </div>
             )}
 
-            {/* VIDEO CLIPS / EMBEDS CARD */}
-            {persona.videos && persona.videos.length > 0 && (
-              <div className="bg-[#0c0e18] border border-white/[0.08] rounded-xl p-4 shadow-lg space-y-3" id="videos-section">
-                <div className="flex items-center justify-between pb-2 border-b border-white/[0.06]">
-                  <h3 className="text-xs font-bold text-white tracking-tight flex items-center gap-1.5">
-                    <Video className="w-3.5 h-3.5 text-pink-400" />
-                    <span>Video Clips ({persona.videos.length})</span>
-                  </h3>
-                  <span className="text-[10px] text-pink-400 font-semibold uppercase">HD Stream Embeds</span>
-                </div>
 
-                <div className="space-y-3">
-                  {persona.videos.map((vid, idx) => (
-                    <div key={vid.id || idx} className="rounded-lg overflow-hidden border border-white/[0.08] bg-black/50 p-2 space-y-1.5">
-                      <div className="flex items-center justify-between px-1 text-[11px] text-pink-200 font-semibold">
-                        <span>{vid.title || `Video Clip ${idx + 1}`}</span>
-                        <span className="text-[10px] text-neutral-400 bg-white/[0.06] px-1.5 py-0.5 rounded">RubyVid</span>
-                      </div>
-                      <div style={{ position: "relative", paddingBottom: "56%", paddingTop: "20px", height: 0 }}>
-                        <iframe
-                          src={vid.url}
-                          frameBorder={0}
-                          marginWidth={0}
-                          marginHeight={0}
-                          scrolling="no"
-                          width={640}
-                          height={360}
-                          allow="autoplay; fullscreen; picture-in-picture; encrypted-media; accelerometer; gyroscope; clipboard-write; web-share"
-                          allowFullScreen
-                          referrerPolicy="no-referrer"
-                          style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", border: 0 }}
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
         </div>
       </main>

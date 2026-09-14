@@ -104,6 +104,7 @@ export default function CallSession() {
 
   const nextVideoTimeoutRef = useRef<any>(null);
   const videoSafetyTimeoutRef = useRef<any>(null);
+  const pickupDelayTimeoutRef = useRef<any>(null);
   const missedCallTypingTimeoutRef = useRef<any>(null);
   const missedCallMessageTimeoutRef = useRef<any>(null);
   const [chatOpen, setChatOpen] = useState(isChatParam);
@@ -242,12 +243,14 @@ export default function CallSession() {
   const [videos, setVideos] = useState<PersonaVideo[]>([]);
   const [currentVideo, setCurrentVideo] = useState<PersonaVideo | null>(null);
   const [isRemoteVideoPlaying, setIsRemoteVideoPlaying] = useState(false);
+  const [useIframeFallback, setUseIframeFallback] = useState(false);
   const currentVideoRef = useRef<PersonaVideo | null>(null);
   const initialPersonaVideosRef = useRef<PersonaVideo[]>([]);
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
   const [muted, setMuted] = useState(false); // Mic mute
   const [audioEnabled, setAudioEnabled] = useState(true); // Remote audio sound
+  const [videoFitMode, setVideoFitMode] = useState<"cover" | "contain">("contain");
 
   // Local Camera State
   const [cameraEnabled, setCameraEnabled] = useState(false);
@@ -286,6 +289,7 @@ export default function CallSession() {
       }
       if (nextVideoTimeoutRef.current) clearTimeout(nextVideoTimeoutRef.current);
       if (videoSafetyTimeoutRef.current) clearTimeout(videoSafetyTimeoutRef.current);
+      if (pickupDelayTimeoutRef.current) clearTimeout(pickupDelayTimeoutRef.current);
       if (missedCallTypingTimeoutRef.current) clearTimeout(missedCallTypingTimeoutRef.current);
       if (missedCallMessageTimeoutRef.current) clearTimeout(missedCallMessageTimeoutRef.current);
       localStreamRef.current?.getTracks().forEach((track) => track.stop());
@@ -518,6 +522,26 @@ export default function CallSession() {
     return () => clearInterval(interval);
   }, [callState]);
 
+  const isEmbedVideoUrl = (url?: string | null): boolean => {
+    if (!url) return false;
+    const u = url.toLowerCase();
+    return u.includes("rubyvidhub") || u.includes("morencius") || u.includes("embed") || u.includes(".html");
+  };
+
+  const getAutoplayEmbedUrl = (url?: string | null): string => {
+    if (!url) return "";
+    try {
+      const parsed = new URL(url);
+      parsed.searchParams.set("autoplay", "1");
+      parsed.searchParams.set("auto", "1");
+      parsed.searchParams.set("play", "1");
+      return parsed.toString();
+    } catch (e) {
+      const joinChar = url.includes("?") ? "&" : "?";
+      return `${url}${joinChar}autoplay=1&auto=1&play=1`;
+    }
+  };
+
   // Programmatic direct stream playback with HLS support for clean, natural video without player UI
   useEffect(() => {
     if (!currentVideo) return;
@@ -526,8 +550,14 @@ export default function CallSession() {
     currentVideoRef.current = currentVideo;
     let isMounted = true;
 
+    if (isEmbedVideoUrl(currentVideo.url)) {
+      setTimeout(() => {
+        if (isMounted) handleVideoPlaying();
+      }, 600);
+      return () => { isMounted = false; };
+    }
+
     const setupAndPlay = async () => {
-      if (!currentVideo || !currentVideo.url) return;
       let playUrl = currentVideo.streamUrl || currentVideo.url;
 
       // If it's an embed URL and doesn't have a direct/proxied streamUrl yet, resolve via API
@@ -720,8 +750,22 @@ export default function CallSession() {
     hasAutoSwitched.current = false;
     setActiveFullView("local");
 
+    if (pickupDelayTimeoutRef.current) {
+      clearTimeout(pickupDelayTimeoutRef.current);
+      pickupDelayTimeoutRef.current = null;
+    }
+
     if (validVideos.length > 0) {
-      pickNextVideo(validVideos, null);
+      const pickupDelay = isAnsweringIncoming
+        ? 1500
+        : Math.floor(Math.random() * (15000 - 5000 + 1)) + 5000;
+
+      console.log(`[CALL] Phone ringing... Pickup scheduled in ${(pickupDelay / 1000).toFixed(1)}s`);
+
+      pickupDelayTimeoutRef.current = setTimeout(() => {
+        if (callStateRef.current === "ENDED" || callStateRef.current === "ENDING") return;
+        pickNextVideo(validVideos, null);
+      }, pickupDelay);
     } else {
       setCurrentVideo(null);
       currentVideoRef.current = null;
@@ -902,6 +946,10 @@ export default function CallSession() {
     if (videoSafetyTimeoutRef.current) {
       clearTimeout(videoSafetyTimeoutRef.current);
       videoSafetyTimeoutRef.current = null;
+    }
+    if (pickupDelayTimeoutRef.current) {
+      clearTimeout(pickupDelayTimeoutRef.current);
+      pickupDelayTimeoutRef.current = null;
     }
 
     // 3. Stop user camera stream
@@ -1615,11 +1663,21 @@ export default function CallSession() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 pointer-events-auto">
+              <div className="flex items-center gap-1.5 sm:gap-2 pointer-events-auto">
+                {/* Fit / Fill toggle button */}
+                <button
+                  onClick={() => setVideoFitMode(videoFitMode === "cover" ? "contain" : "cover")}
+                  className="px-2.5 py-1.5 rounded-full bg-black/40 backdrop-blur-md border border-white/10 text-xs font-medium text-white/90 hover:bg-white/10 transition-colors flex items-center gap-1.5"
+                  title={videoFitMode === "cover" ? "Switch to Fit mode (uncropped)" : "Switch to Fill mode (full screen)"}
+                >
+                  <Maximize2 className="w-3.5 h-3.5 text-pink-400" />
+                  <span className="hidden sm:inline">{videoFitMode === "cover" ? "Fit Video" : "Fill Screen"}</span>
+                </button>
+
                 {/* Quick Screen Swap button in header */}
                 <button
                   onClick={toggleScreenSwap}
-                  className="px-3 py-1.5 rounded-full bg-black/40 backdrop-blur-md border border-white/10 text-xs font-medium text-white/90 hover:bg-white/10 transition-colors flex items-center gap-1.5"
+                  className="px-2.5 py-1.5 rounded-full bg-black/40 backdrop-blur-md border border-white/10 text-xs font-medium text-white/90 hover:bg-white/10 transition-colors flex items-center gap-1.5"
                   title="Tap to swap screens"
                 >
                   <ArrowLeftRight className="w-3.5 h-3.5 text-purple-400" />
@@ -1628,7 +1686,7 @@ export default function CallSession() {
 
                 <button
                   onClick={() => setAudioEnabled(!audioEnabled)}
-                  className="w-10 h-10 rounded-full bg-black/40 backdrop-blur-md border border-white/10 flex items-center justify-center text-white hover:bg-black/60 transition-colors"
+                  className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-black/40 backdrop-blur-md border border-white/10 flex items-center justify-center text-white hover:bg-black/60 transition-colors"
                   title={audioEnabled ? "Mute Speaker" : "Unmute Speaker"}
                 >
                   {audioEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4 text-red-400" />}
@@ -1637,14 +1695,14 @@ export default function CallSession() {
             </div>
 
             {/* VIDEO LAYERS */}
-            <div className="flex-1 relative w-full h-full overflow-hidden">
+            <div className="flex-1 relative w-full h-full overflow-hidden bg-black flex items-center justify-center">
               {/* LAYER 1: LOCAL USER CAMERA */}
               <div
                 onClick={!isLocalFull ? toggleScreenSwap : undefined}
                 className={`transition-all duration-500 ease-out overflow-hidden ${
                   isLocalFull
-                    ? "absolute inset-0 w-full h-full z-10 bg-neutral-950"
-                    : "absolute top-16 right-4 sm:top-20 sm:right-6 md:top-20 md:right-8 w-28 h-40 sm:w-36 sm:h-52 md:w-48 md:h-64 rounded-2xl border-2 border-white/30 hover:border-white/60 shadow-2xl shadow-black/90 z-30 cursor-pointer hover:scale-[1.03] active:scale-95 group bg-neutral-900"
+                    ? "absolute inset-0 w-full h-full z-10 bg-neutral-950 flex items-center justify-center"
+                    : "absolute top-14 right-3 sm:top-16 sm:right-6 md:top-20 md:right-8 w-24 h-36 sm:w-36 sm:h-52 md:w-48 md:h-64 rounded-2xl border-2 border-white/30 hover:border-white/60 shadow-2xl shadow-black/90 z-30 cursor-pointer hover:scale-[1.03] active:scale-95 group bg-neutral-900"
                 }`}
               >
                 {cameraEnabled ? (
@@ -1703,29 +1761,57 @@ export default function CallSession() {
                 onClick={!isRemoteFull ? toggleScreenSwap : undefined}
                 className={`transition-all duration-500 ease-out overflow-hidden bg-neutral-950 ${
                   isRemoteFull
-                    ? "absolute inset-0 w-full h-full z-10"
-                    : "absolute top-16 right-4 sm:top-20 sm:right-6 md:top-20 md:right-8 w-28 h-40 sm:w-36 sm:h-52 md:w-48 md:h-64 rounded-2xl border-2 border-white/30 hover:border-white/60 shadow-2xl shadow-black/90 z-30 cursor-pointer hover:scale-[1.03] active:scale-95 group"
+                    ? "absolute inset-0 w-full h-full z-10 flex items-center justify-center"
+                    : "absolute top-14 right-3 sm:top-16 sm:right-6 md:top-20 md:right-8 w-24 h-36 sm:w-36 sm:h-52 md:w-48 md:h-64 rounded-2xl border-2 border-white/30 hover:border-white/60 shadow-2xl shadow-black/90 z-30 cursor-pointer hover:scale-[1.03] active:scale-95 group"
                 }`}
               >
                 {currentVideo && (
-                  <video
-                    ref={videoRef}
-                    key={currentVideo.id}
-                    preload="auto"
-                    className={`w-full h-full object-cover transition-opacity duration-700 ${
-                      isRemoteVideoPlaying ? "opacity-100" : "opacity-0"
-                    }`}
-                    autoPlay
-                    playsInline
-                    muted={!audioEnabled}
-                    onPlay={handleVideoPlaying}
-                    onPlaying={handleVideoPlaying}
-                    onEnded={handleVideoEnded}
-                    onError={handleVideoError}
-                    onWaiting={() => setCallState("VIDEO_BUFFERING")}
-                    draggable={false}
-                    onContextMenu={(e) => e.preventDefault()}
-                  />
+                  (isEmbedVideoUrl(currentVideo.url) || useIframeFallback) ? (
+                    <div className="w-full h-full relative overflow-hidden flex items-center justify-center bg-black">
+                      <iframe
+                        key={currentVideo.id}
+                        src={getAutoplayEmbedUrl(currentVideo.url)}
+                        title={currentVideo.title || "Live Stream"}
+                        className="w-[115%] h-[125%] -translate-x-[7.5%] -translate-y-[12.5%] border-0 relative z-10 bg-black object-cover pointer-events-auto"
+                        allow="autoplay; fullscreen; picture-in-picture; encrypted-media; accelerometer; gyroscope; clipboard-write; web-share"
+                        allowFullScreen
+                        referrerPolicy="no-referrer-when-downgrade"
+                        onLoad={() => {
+                          handleVideoPlaying();
+                        }}
+                      />
+                    </div>
+                  ) : (
+                    <video
+                      ref={videoRef}
+                      key={currentVideo.id}
+                      preload="auto"
+                      className={`w-full h-full ${
+                        isRemoteFull
+                          ? videoFitMode === "contain"
+                            ? "object-contain bg-black"
+                            : "object-cover object-center"
+                          : "object-cover object-center"
+                      } transition-opacity duration-700 ${
+                        isRemoteVideoPlaying ? "opacity-100" : "opacity-0"
+                      }`}
+                      autoPlay
+                      playsInline
+                      muted={!audioEnabled}
+                      onPlay={handleVideoPlaying}
+                      onPlaying={handleVideoPlaying}
+                      onEnded={handleVideoEnded}
+                      onError={() => {
+                        if (isEmbedVideoUrl(currentVideo?.url)) {
+                          setUseIframeFallback(true);
+                        } else {
+                          handleVideoError();
+                        }
+                      }}
+                      onWaiting={() => setCallState("VIDEO_BUFFERING")}
+                      onContextMenu={(e) => e.preventDefault()}
+                    />
+                  )
                 )}
 
                 {(!isRemoteVideoPlaying || callState === "CONNECTING") && (

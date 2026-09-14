@@ -47,6 +47,19 @@ const PORT = Number(process.env.PORT) || 3000;
 // In-memory cache/fallback in case database is initializing or unavailable
 let inMemoryPersonas = [...DEFAULT_PERSONAS];
 
+function getInMemoryPersonas(): Persona[] {
+  const map = new Map<string, any>();
+  DEFAULT_PERSONAS.forEach((p) => map.set(p.slug.toLowerCase(), { ...p }));
+
+  inMemoryPersonas.forEach((p) => {
+    const slug = p.slug?.toLowerCase();
+    if (slug && !map.has(slug)) {
+      map.set(slug, p);
+    }
+  });
+  return Array.from(map.values());
+}
+
 const SITEMAP_BASE_URL = "https://dreambabe.pages.dev";
 
 async function getAllActiveSlugs(): Promise<string[]> {
@@ -63,7 +76,7 @@ async function getAllActiveSlugs(): Promise<string[]> {
     console.warn("Could not query DB for slugs, using in-memory list:", err);
   }
 
-  inMemoryPersonas.forEach((p) => {
+  getInMemoryPersonas().forEach((p) => {
     if (p.active && p.slug) slugs.add(p.slug.toLowerCase());
   });
 
@@ -312,7 +325,7 @@ app.get("/api/personas", async (req, res) => {
     console.warn("Prisma error in /api/personas, falling back to default personas:", error);
   }
   // Return in-memory fallback
-  res.json(inMemoryPersonas.filter(p => p.active));
+  res.json(getInMemoryPersonas().filter(p => p.active));
 });
 
 const streamResolutionCache = new Map<string, { streamUrl: string; expiresAt: number }>();
@@ -449,6 +462,15 @@ async function handleProxyResponse(
 
     if (remoteRes.body) {
       const nodeStream = Readable.fromWeb(remoteRes.body as any);
+      nodeStream.on('error', (err) => {
+        console.error("Stream error in hls-proxy:", err);
+        if (!res.headersSent) {
+          res.status(500).end();
+        }
+      });
+      res.on('error', (err) => {
+        console.error("Response stream error:", err);
+      });
       nodeStream.pipe(res);
     } else {
       res.end();
@@ -499,10 +521,9 @@ app.get("/api/hls-proxy", async (req, res) => {
       Referer: "https://rubyvidhub.com/",
     };
 
-    if (req.headers.range) {
-      headers["Range"] = req.headers.range as string;
-    }
+    // Do not forward Range header, as it causes timeouts on some CDNs (like acek-cdn)
 
+    console.log("[PROXY FETCH] URL:", resolvedTarget, "HEADERS:", headers);
     let remoteRes = await fetch(resolvedTarget, { headers });
 
     // If stream expired, clear cache and retry fresh resolution if embedUrl is known
@@ -578,7 +599,7 @@ app.get("/api/personas/:slug", async (req, res) => {
   }
 
   // Fallback to inMemoryPersonas
-  const found = inMemoryPersonas.find((p) => p.slug.toLowerCase() === reqSlug);
+  const found = getInMemoryPersonas().find((p) => p.slug.toLowerCase() === reqSlug);
   if (found && found.active) {
     const { systemPrompt, ...publicPersona } = found;
     const videosWithStreams = (publicPersona.videos || []).map((v) => {
@@ -623,7 +644,7 @@ app.post("/api/chat", async (req, res) => {
     }
 
     if (!persona) {
-      persona = inMemoryPersonas.find((p) => p.id === personaId || p.slug === personaId);
+      persona = getInMemoryPersonas().find((p) => p.id === personaId || p.slug === personaId);
     }
     
     if (!persona) {
@@ -789,7 +810,7 @@ async function seedDatabase() {
     await prisma.persona.deleteMany({
       where: {
         slug: {
-          notIn: ["pinkchyu", "bigtittygothegg"]
+          notIn: DEFAULT_PERSONAS.map((p) => p.slug)
         }
       }
     });
