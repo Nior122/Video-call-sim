@@ -56,18 +56,11 @@ export function getPersonaOnlineStatus(slug?: string | null): PersonaOnlineStatu
     };
   }
 
-  // Deterministic fallback based on slug hash
-  let hash = 0;
-  for (let i = 0; i < slug.length; i++) {
-    hash = (hash << 5) - hash + slug.charCodeAt(i);
-  }
-  const isOnline = Math.abs(hash) % 2 === 0;
-  const minutesAgo = (Math.abs(hash) % 180) + 5;
-
+  // Default all personas to online so chat always responds instantly
   return {
-    isOnline,
-    statusText: isOnline ? "Online" : `Last seen ${formatLastSeen(minutesAgo)}`,
-    lastSeenText: formatLastSeen(minutesAgo),
+    isOnline: true,
+    statusText: "Online",
+    lastSeenText: "Just now",
   };
 }
 

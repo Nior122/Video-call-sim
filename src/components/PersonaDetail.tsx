@@ -831,6 +831,7 @@ export default function PersonaDetail() {
                       <img
                         src={fiveImages[0]}
                         alt="Photo 1"
+                        referrerPolicy="no-referrer"
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                       />
                       <div className="absolute inset-0 bg-black/15 group-hover:bg-transparent transition-colors" />
@@ -845,6 +846,7 @@ export default function PersonaDetail() {
                           <img
                             src={fiveImages[1]}
                             alt="Photo 2"
+                            referrerPolicy="no-referrer"
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                           />
                         </div>
@@ -857,6 +859,7 @@ export default function PersonaDetail() {
                           <img
                             src={fiveImages[2]}
                             alt="Photo 3"
+                            referrerPolicy="no-referrer"
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                           />
                         </div>
@@ -874,6 +877,7 @@ export default function PersonaDetail() {
                           <img
                             src={fiveImages[3]}
                             alt="Photo 4"
+                            referrerPolicy="no-referrer"
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                           />
                         </div>
@@ -886,6 +890,7 @@ export default function PersonaDetail() {
                           <img
                             src={fiveImages[4]}
                             alt="Photo 5"
+                            referrerPolicy="no-referrer"
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                           />
                         </div>
@@ -985,6 +990,7 @@ export default function PersonaDetail() {
               <img
                 src={fiveImages[lightboxIndex]}
                 alt={`Photo ${lightboxIndex + 1}`}
+                referrerPolicy="no-referrer"
                 draggable={false}
                 onContextMenu={(e) => e.preventDefault()}
                 className="max-w-full max-h-[75vh] object-contain rounded-xl shadow-2xl border border-white/10"

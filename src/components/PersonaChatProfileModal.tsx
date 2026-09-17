@@ -229,6 +229,7 @@ export default function PersonaChatProfileModal({
                         <img
                           src={imgUrl}
                           alt={`${persona.name} ${i}`}
+                          referrerPolicy="no-referrer"
                           draggable={false}
                           onContextMenu={(e) => e.preventDefault()}
                           className="w-full h-full object-cover group-hover:opacity-90 transition-opacity select-none"

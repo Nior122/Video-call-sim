@@ -61,6 +61,7 @@ export interface PersonaVideo {
   personaId: string;
   url: string;
   streamUrl?: string | null;
+  thumbnail?: string | null;
   title: string;
   active: boolean;
   createdAt?: string;
@@ -94,6 +95,7 @@ export type CallState =
   | "VIDEO_BUFFERING"
   | "VIDEO_ERROR"
   | "WAITING_FOR_NEXT_CLIP"
+  | "USER_BUSY"
   | "ENDING"
   | "ENDED";
 

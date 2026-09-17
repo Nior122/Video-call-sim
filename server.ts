@@ -298,6 +298,52 @@ Keep your responses conversational and reasonably concise.`;
 });
 
 // --------------------------------------------------
+// VIDEO PROXY (for CDN videos requiring Referer header)
+// --------------------------------------------------
+app.get("/api/video-proxy", async (req, res) => {
+  const videoUrl = req.query.url as string;
+  if (!videoUrl || !videoUrl.startsWith("https://cdn.leakgallery.com/")) {
+    return res.status(400).json({ error: "Invalid or missing URL" });
+  }
+
+  try {
+    const https = await import("https");
+    const rangeHeader = req.headers["range"];
+    const requestHeaders: Record<string, string> = {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      "Referer": "https://leakgallery.com/",
+      "Origin": "https://leakgallery.com",
+      "Accept": "*/*",
+    };
+    if (rangeHeader) requestHeaders["Range"] = rangeHeader;
+
+    const proxyReq = https.get(videoUrl, { headers: requestHeaders }, (proxyRes) => {
+      const statusCode = proxyRes.statusCode || 200;
+      const headers: Record<string, string | string[]> = {
+        "Content-Type": proxyRes.headers["content-type"] || "video/mp4",
+        "Accept-Ranges": "bytes",
+        "Cache-Control": "public, max-age=3600",
+      };
+      if (proxyRes.headers["content-length"]) headers["Content-Length"] = proxyRes.headers["content-length"];
+      if (proxyRes.headers["content-range"]) headers["Content-Range"] = proxyRes.headers["content-range"];
+
+      res.writeHead(statusCode, headers);
+      proxyRes.pipe(res);
+    });
+
+    proxyReq.on("error", (err) => {
+      console.error("Video proxy error:", err.message);
+      if (!res.headersSent) res.status(502).json({ error: "Proxy error" });
+    });
+
+    req.on("close", () => proxyReq.destroy());
+  } catch (err) {
+    console.error("Video proxy exception:", err);
+    if (!res.headersSent) res.status(500).json({ error: "Internal error" });
+  }
+});
+
+// --------------------------------------------------
 // PUBLIC ROUTES
 // --------------------------------------------------
 

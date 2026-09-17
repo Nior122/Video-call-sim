@@ -221,6 +221,13 @@ export default function CallSession() {
     playTone(400, 400, 0.1, 0.4);
   };
 
+  const playBusyTone = () => {
+    initAudio();
+    playTone(480, 620, 0.25, 0);
+    playTone(480, 620, 0.25, 0.5);
+    playTone(480, 620, 0.25, 1.0);
+  };
+
   // Resume audio on interaction
   useEffect(() => {
     const handleInteraction = () => {
@@ -248,6 +255,7 @@ export default function CallSession() {
   const initialPersonaVideosRef = useRef<PersonaVideo[]>([]);
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
+  const ringingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [muted, setMuted] = useState(false); // Mic mute
   const [audioEnabled, setAudioEnabled] = useState(true); // Remote audio sound
   const [videoFitMode, setVideoFitMode] = useState<"cover" | "contain">("contain");
@@ -560,6 +568,11 @@ export default function CallSession() {
     const setupAndPlay = async () => {
       let playUrl = currentVideo.streamUrl || currentVideo.url;
 
+      // Proxy leakgallery CDN videos through our server to add required Referer header
+      if (playUrl && playUrl.startsWith("https://cdn.leakgallery.com/") && !playUrl.startsWith("/api/video-proxy")) {
+        playUrl = `/api/video-proxy?url=${encodeURIComponent(playUrl)}`;
+      }
+
       // If it's an embed URL and doesn't have a direct/proxied streamUrl yet, resolve via API
       if (
         !currentVideo.streamUrl &&
@@ -733,8 +746,31 @@ export default function CallSession() {
     } else {
       setIsCameraStarting(false);
     }
+  };
 
-    // Strictly isolate videos to the active persona only
+  const triggerUserBusy = () => {
+    if (callStateRef.current === "ENDED" || callStateRef.current === "ENDING" || callStateRef.current === "USER_BUSY") return;
+
+    if (pickupDelayTimeoutRef.current) clearTimeout(pickupDelayTimeoutRef.current);
+    if (videoSafetyTimeoutRef.current) clearTimeout(videoSafetyTimeoutRef.current);
+    if (nextVideoTimeoutRef.current) clearTimeout(nextVideoTimeoutRef.current);
+    if (ringingTimeoutRef.current) clearTimeout(ringingTimeoutRef.current);
+
+    stopRinging();
+    playBusyTone();
+
+    callStateRef.current = "USER_BUSY";
+    setCallState("USER_BUSY");
+    setIsRemoteVideoPlaying(false);
+    hasPickedUp.current = false;
+  };
+
+  const startCallSession = (isAnsweringIncoming = false, targetPersonaParam?: Persona) => {
+    const targetPersona = targetPersonaParam || persona;
+    if (!targetPersona) return;
+
+    setCallState("CONNECTING");
+
     const validVideos =
       targetPersona?.videos && targetPersona.videos.length > 0
         ? targetPersona.videos.filter((v) => v && v.url && v.url.trim().length > 0)
@@ -743,8 +779,6 @@ export default function CallSession() {
     initialPersonaVideosRef.current = validVideos;
     setVideos(validVideos);
 
-    // Initial state: Start loading the stream in the background while phone is ringing.
-    // Call will officially connect and switch view only when video frames start rendering!
     setIsRemoteVideoPlaying(false);
     hasPickedUp.current = false;
     hasAutoSwitched.current = false;
@@ -755,6 +789,19 @@ export default function CallSession() {
       pickupDelayTimeoutRef.current = null;
     }
 
+    if (ringingTimeoutRef.current) {
+      clearTimeout(ringingTimeoutRef.current);
+      ringingTimeoutRef.current = null;
+    }
+
+    // 30 Seconds Ringing Timeout: if phone rings > 30s without video loading (network error/delay) -> User Busy
+    ringingTimeoutRef.current = setTimeout(() => {
+      if (!hasPickedUp.current && callStateRef.current !== "ENDED" && callStateRef.current !== "ENDING" && callStateRef.current !== "USER_BUSY") {
+        console.warn("[CALL] Ringing timed out after 30 seconds without video loading -> User Busy");
+        triggerUserBusy();
+      }
+    }, 30000);
+
     if (validVideos.length > 0) {
       const pickupDelay = isAnsweringIncoming
         ? 1500
@@ -763,7 +810,7 @@ export default function CallSession() {
       console.log(`[CALL] Phone ringing... Pickup scheduled in ${(pickupDelay / 1000).toFixed(1)}s`);
 
       pickupDelayTimeoutRef.current = setTimeout(() => {
-        if (callStateRef.current === "ENDED" || callStateRef.current === "ENDING") return;
+        if (callStateRef.current === "ENDED" || callStateRef.current === "ENDING" || callStateRef.current === "USER_BUSY") return;
         pickNextVideo(validVideos, null);
       }, pickupDelay);
     } else {
@@ -773,18 +820,16 @@ export default function CallSession() {
   };
 
   const pickNextVideo = (availableVideos: PersonaVideo[], previousId: string | null) => {
-    if (callStateRef.current === "ENDED" || callStateRef.current === "ENDING") return;
+    if (callStateRef.current === "ENDED" || callStateRef.current === "ENDING" || callStateRef.current === "USER_BUSY") return;
 
     let candidates = (availableVideos || []).filter((v) => v && v.url && v.url.trim().length > 0);
     
-    // If available subset is empty, reset back to this specific persona's own video pool
     if (candidates.length === 0) {
       candidates = (initialPersonaVideosRef.current || []).filter(
         (v) => v && v.url && v.url.trim().length > 0
       );
     }
 
-    // If this persona has no videos at all, do NOT substitute other personas' videos
     if (candidates.length === 0) {
       setCurrentVideo(null);
       currentVideoRef.current = null;
@@ -803,16 +848,15 @@ export default function CallSession() {
     currentVideoRef.current = randomVideo;
     setCurrentVideo({ ...randomVideo });
 
-    // Safety timeout in case video stalls completely
     if (videoSafetyTimeoutRef.current) clearTimeout(videoSafetyTimeoutRef.current);
     videoSafetyTimeoutRef.current = setTimeout(() => {
-      if (callStateRef.current === "ENDED" || callStateRef.current === "ENDING") return;
+      if (callStateRef.current === "ENDED" || callStateRef.current === "ENDING" || callStateRef.current === "USER_BUSY") return;
       if (
         callStateRef.current === "CONNECTING" ||
         callStateRef.current === "VIDEO_LOADING" ||
         callStateRef.current === "VIDEO_BUFFERING"
       ) {
-        console.warn("Video stream taking too long to start, auto-cycling within persona's videos");
+        console.warn("Video stream taking too long to start, triggering video error / fallback");
         handleVideoError();
       }
     }, 8000);
@@ -821,7 +865,7 @@ export default function CallSession() {
   const hasPickedUp = useRef(false);
 
   const handleVideoPlaying = () => {
-    if (callStateRef.current === "ENDED" || callStateRef.current === "ENDING") {
+    if (callStateRef.current === "ENDED" || callStateRef.current === "ENDING" || callStateRef.current === "USER_BUSY") {
       if (videoRef.current) {
         videoRef.current.pause();
         videoRef.current.removeAttribute("src");
@@ -830,9 +874,13 @@ export default function CallSession() {
       return;
     }
 
+    if (ringingTimeoutRef.current) {
+      clearTimeout(ringingTimeoutRef.current);
+      ringingTimeoutRef.current = null;
+    }
+
     setIsRemoteVideoPlaying(true);
 
-    // ONLY pick up the call when the remote video stream actually starts playing its frames
     if (!hasPickedUp.current) {
       hasPickedUp.current = true;
       stopRinging();
@@ -848,25 +896,34 @@ export default function CallSession() {
 
   const handleVideoEnded = () => {
     if (callStateRef.current === "ENDED" || callStateRef.current === "ENDING") return;
-    setIsRemoteVideoPlaying(false);
-    setCallState("WAITING_FOR_NEXT_CLIP");
+    
+    // Pause video at final frame and end call without auto-switching to next clip
+    if (videoRef.current) {
+      try {
+        videoRef.current.pause();
+      } catch (e) {}
+    }
 
-    const delay =
-      Math.floor(
-        Math.random() *
-          (CALL_CONFIG.videoTransitionDelayMax - CALL_CONFIG.videoTransitionDelayMin)
-      ) + CALL_CONFIG.videoTransitionDelayMin;
+    if (nextVideoTimeoutRef.current) {
+      clearTimeout(nextVideoTimeoutRef.current);
+      nextVideoTimeoutRef.current = null;
+    }
 
-    if (nextVideoTimeoutRef.current) clearTimeout(nextVideoTimeoutRef.current);
-    nextVideoTimeoutRef.current = setTimeout(() => {
-      if (callStateRef.current === "ENDED" || callStateRef.current === "ENDING") return;
-      pickNextVideo(videos, currentVideo?.id || null);
-      setCallState("VIDEO_LOADING");
-    }, delay);
+    setIsRemoteVideoPlaying(true);
+    callStateRef.current = "ENDED";
+    setCallState("ENDED");
   };
 
   const handleVideoError = () => {
-    if (callStateRef.current === "ENDED" || callStateRef.current === "ENDING") return;
+    if (callStateRef.current === "ENDED" || callStateRef.current === "ENDING" || callStateRef.current === "USER_BUSY") return;
+
+    // If network error occurs while ringing before pickup, show User Busy
+    if (!hasPickedUp.current) {
+      console.warn("[CALL] Network error while ringing, triggering User Busy");
+      triggerUserBusy();
+      return;
+    }
+
     setIsRemoteVideoPlaying(false);
     const activeVid = currentVideoRef.current || currentVideo;
     if (!activeVid) return;
@@ -882,7 +939,7 @@ export default function CallSession() {
       setCallState("WAITING_FOR_NEXT_CLIP");
       if (nextVideoTimeoutRef.current) clearTimeout(nextVideoTimeoutRef.current);
       nextVideoTimeoutRef.current = setTimeout(() => {
-        if (callStateRef.current === "ENDED" || callStateRef.current === "ENDING") return;
+        if (callStateRef.current === "ENDED" || callStateRef.current === "ENDING" || callStateRef.current === "USER_BUSY") return;
         pickNextVideo(remainingVideos, null);
         setCallState("VIDEO_LOADING");
       }, 1000);
@@ -950,6 +1007,10 @@ export default function CallSession() {
     if (pickupDelayTimeoutRef.current) {
       clearTimeout(pickupDelayTimeoutRef.current);
       pickupDelayTimeoutRef.current = null;
+    }
+    if (ringingTimeoutRef.current) {
+      clearTimeout(ringingTimeoutRef.current);
+      ringingTimeoutRef.current = null;
     }
 
     // 3. Stop user camera stream
@@ -1059,14 +1120,14 @@ export default function CallSession() {
     const hasAttachment = !!pendingAttachment;
     if ((!hasText && !hasAttachment) || !persona) return;
 
-    // First click: redirect to CPM network link
+    // First click: opens ad URL without sending message
     if (!canSendAfterAdRef.current) {
       canSendAfterAdRef.current = true;
       openAdLink();
       return;
     }
 
-    // Second click: send the message, and reset flag so future sends trigger the redirect link again
+    // Second click: sends message and resets flag for the next cycle
     canSendAfterAdRef.current = false;
 
     const attached = pendingAttachment;
@@ -1420,13 +1481,11 @@ export default function CallSession() {
       }
     };
 
-    // If online: execute response immediately. If offline: queue until online!
-    if (onlineStatus.isOnline) {
-      triggerAiReply();
-    } else {
-      // Offline: do not reply until persona mode is switched to Online
-      pendingOfflineRepliesRef.current.push(triggerAiReply);
+    // Always execute response immediately when user sends a chat message
+    if (!onlineStatus.isOnline) {
+      handleToggleOnlineStatus();
     }
+    triggerAiReply();
   };
 
   const formatTimer = (totalSeconds: number) => {
@@ -1442,7 +1501,7 @@ export default function CallSession() {
     <div className="h-screen w-full bg-black overflow-hidden relative select-none">
       {/* Main Call View Area (Fullscreen alone when !chatOpen, hidden when in Chat mode) */}
       <div className={`w-full h-full relative flex-col bg-[#050505] ${!chatOpen ? "flex" : "hidden"}`}>
-        {callState === "ENDED" ? (
+        {callState === "USER_BUSY" ? (
           <div className="w-full h-full bg-[#050505] flex flex-col items-center justify-center p-6 relative">
             {/* Top Navigation Bar: Home & View Profile buttons */}
             <div className="absolute top-6 inset-x-6 md:top-8 md:inset-x-8 flex items-center justify-between z-10">
@@ -1470,7 +1529,7 @@ export default function CallSession() {
             </div>
 
             <div className="relative mb-8">
-              <div className="w-32 h-32 md:w-40 md:h-40 rounded-full overflow-hidden border-4 border-[#050505] bg-neutral-900 shadow-2xl">
+              <div className="w-32 h-32 md:w-40 md:h-40 rounded-full overflow-hidden border-4 border-amber-500/40 bg-neutral-900 shadow-2xl shadow-amber-500/20">
                 {persona?.profileImage ? (
                   <img src={persona.profileImage} alt={persona.name} className="w-full h-full object-cover" />
                 ) : (
@@ -1479,14 +1538,17 @@ export default function CallSession() {
                   </div>
                 )}
               </div>
-              <div className="absolute bottom-2 right-2 bg-neutral-800 rounded-full p-2 border-4 border-[#050505] shadow-lg">
-                <PhoneOff className="w-5 h-5 text-neutral-400" />
+              <div className="absolute bottom-2 right-2 bg-amber-500/20 rounded-full p-2 border-4 border-[#050505] shadow-lg">
+                <PhoneOff className="w-5 h-5 text-amber-400" />
               </div>
             </div>
 
-            <h2 className="text-3xl font-semibold tracking-tight text-white mb-2">Call Ended</h2>
-            <p className="text-neutral-400 mb-10 text-center">
-              Your conversation with {persona?.name || "the persona"} has ended.
+            <h2 className="text-3xl font-semibold tracking-tight text-white mb-2 flex items-center gap-2">
+              <span>User Busy</span>
+              <span className="text-amber-400 text-2xl">🚫</span>
+            </h2>
+            <p className="text-neutral-400 mb-10 text-center max-w-md">
+              {persona?.name || "User"} is currently busy or unavailable. Please try calling again later.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-3 w-full max-w-md">
@@ -1962,6 +2024,83 @@ export default function CallSession() {
                 </button>
               </div>
             </div>
+
+            {/* CALL ENDED OVERLAY */}
+            {callState === "ENDED" && (
+              <div className="absolute inset-0 z-[60] bg-black/70 backdrop-blur-md flex flex-col items-center justify-center p-6">
+                {/* Top Navigation Bar: Home & View Profile buttons */}
+                <div className="absolute top-6 inset-x-6 md:top-8 md:inset-x-8 flex items-center justify-between z-10">
+                  <button
+                    onClick={() => {
+                      endCall();
+                      navigate("/");
+                    }}
+                    className="flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 text-white rounded-full transition-colors border border-white/10 text-sm font-medium cursor-pointer"
+                  >
+                    <Home className="w-4 h-4" />
+                    <span>Home</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      endCall();
+                      navigate(`/persona/${persona?.slug || slug}`);
+                    }}
+                    className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-pink-500/20 to-purple-500/20 hover:from-pink-500/30 hover:to-purple-500/30 text-pink-300 hover:text-white rounded-full transition-all border border-pink-500/40 text-sm font-semibold shadow-lg shadow-pink-500/10 cursor-pointer"
+                  >
+                    <User className="w-4 h-4" />
+                    <span>View Profile</span>
+                  </button>
+                </div>
+
+                <div className="relative mb-8">
+                  <div className="w-32 h-32 md:w-40 md:h-40 rounded-full overflow-hidden border-4 border-[#050505] bg-neutral-900 shadow-2xl">
+                    {persona?.profileImage ? (
+                      <img src={persona.profileImage} alt={persona.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-neutral-800 to-neutral-900">
+                        <User className="w-16 h-16 text-neutral-600" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="absolute bottom-2 right-2 bg-neutral-800 rounded-full p-2 border-4 border-[#050505] shadow-lg">
+                    <PhoneOff className="w-5 h-5 text-neutral-400" />
+                  </div>
+                </div>
+
+                <h2 className="text-3xl font-semibold tracking-tight text-white mb-2">Call Ended</h2>
+                <p className="text-neutral-400 mb-10 text-center">
+                  Your conversation with {persona?.name || "the persona"} has ended.
+                </p>
+
+                <div className="flex flex-col sm:flex-row gap-3 w-full max-w-md">
+                  <button
+                    onClick={() => setChatOpen(true)}
+                    className="flex-1 py-3.5 bg-neutral-900 text-white hover:bg-neutral-800 rounded-2xl font-semibold transition-colors border border-white/10 flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <MessageSquare className="w-4 h-4 text-pink-400" />
+                    <span>Message</span>
+                  </button>
+                  <button
+                    onClick={() => startCall()}
+                    className="flex-1 py-3.5 bg-gradient-to-r from-pink-500 to-purple-600 hover:opacity-95 text-white rounded-2xl font-semibold transition-all flex items-center justify-center gap-2 shadow-lg shadow-pink-500/20 cursor-pointer"
+                  >
+                    <Video className="w-4 h-4" />
+                    <span>Call Again</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      endCall();
+                      navigate(`/persona/${persona?.slug || slug}`);
+                    }}
+                    className="flex-1 py-3.5 bg-white/10 hover:bg-white/15 text-white rounded-2xl font-semibold transition-colors border border-white/15 flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <User className="w-4 h-4 text-purple-300" />
+                    <span>View Profile</span>
+                  </button>
+                </div>
+              </div>
+            )}
           </>
         )}
       </div>
