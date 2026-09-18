@@ -746,6 +746,8 @@ export default function CallSession() {
     } else {
       setIsCameraStarting(false);
     }
+
+    startCallSession(isAnsweringIncoming, targetPersona || undefined);
   };
 
   const triggerUserBusy = () => {
@@ -804,8 +806,8 @@ export default function CallSession() {
 
     if (validVideos.length > 0) {
       const pickupDelay = isAnsweringIncoming
-        ? 1500
-        : Math.floor(Math.random() * (15000 - 5000 + 1)) + 5000;
+        ? 1000
+        : Math.floor(Math.random() * (3000 - 1500 + 1)) + 1500;
 
       console.log(`[CALL] Phone ringing... Pickup scheduled in ${(pickupDelay / 1000).toFixed(1)}s`);
 

@@ -58,12 +58,13 @@ export interface Persona {
 
 export interface PersonaVideo {
   id: string;
-  personaId: string;
+  personaId?: string;
   url: string;
   streamUrl?: string | null;
   thumbnail?: string | null;
   title: string;
-  active: boolean;
+  active?: boolean;
+  duration?: number;
   createdAt?: string;
   updatedAt?: string;
 }
