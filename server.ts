@@ -307,7 +307,6 @@ app.get("/api/video-proxy", async (req, res) => {
   }
 
   try {
-    const https = await import("https");
     const rangeHeader = req.headers["range"];
     const requestHeaders: Record<string, string> = {
       "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -317,28 +316,36 @@ app.get("/api/video-proxy", async (req, res) => {
     };
     if (rangeHeader) requestHeaders["Range"] = rangeHeader;
 
-    const proxyReq = https.get(videoUrl, { headers: requestHeaders }, (proxyRes) => {
-      const statusCode = proxyRes.statusCode || 200;
-      const headers: Record<string, string | string[]> = {
-        "Content-Type": proxyRes.headers["content-type"] || "video/mp4",
-        "Accept-Ranges": "bytes",
-        "Cache-Control": "public, max-age=3600",
-      };
-      if (proxyRes.headers["content-length"]) headers["Content-Length"] = proxyRes.headers["content-length"];
-      if (proxyRes.headers["content-range"]) headers["Content-Range"] = proxyRes.headers["content-range"];
+    const controller = new AbortController();
+    req.on("close", () => controller.abort());
 
-      res.writeHead(statusCode, headers);
-      proxyRes.pipe(res);
+    const response = await fetch(videoUrl, {
+      headers: requestHeaders,
+      signal: controller.signal,
     });
 
-    proxyReq.on("error", (err) => {
-      console.error("Video proxy error:", err.message);
-      if (!res.headersSent) res.status(502).json({ error: "Proxy error" });
-    });
+    const statusCode = response.status || 200;
+    const headers: Record<string, string> = {
+      "Content-Type": response.headers.get("content-type") || "video/mp4",
+      "Accept-Ranges": "bytes",
+      "Cache-Control": "public, max-age=3600",
+    };
+    
+    if (response.headers.has("content-length")) headers["Content-Length"] = response.headers.get("content-length")!;
+    if (response.headers.has("content-range")) headers["Content-Range"] = response.headers.get("content-range")!;
 
-    req.on("close", () => proxyReq.destroy());
-  } catch (err) {
-    console.error("Video proxy exception:", err);
+    res.writeHead(statusCode, headers);
+    
+    if (response.body) {
+      const { Readable } = await import("stream");
+      // @ts-ignore
+      Readable.fromWeb(response.body).pipe(res);
+    } else {
+      res.end();
+    }
+  } catch (err: any) {
+    if (err.name === 'AbortError') return;
+    console.error("Video proxy exception:", err.message);
     if (!res.headersSent) res.status(500).json({ error: "Internal error" });
   }
 });
